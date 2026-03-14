@@ -1,0 +1,84 @@
+# ----------------------------
+# Dependencies
+# ----------------------------
+node_modules/
+
+# ----------------------------
+# Env files (DO NOT COMMIT)
+# ----------------------------
+.env
+.env.*
+!.env.example
+
+# Project-specific env locations
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# ----------------------------
+# Sensitive keys and certs
+# ----------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+*.mobileprovision
+*.p8
+
+# Service account files and secret dumps
+*secret*
+*secrets*
+*credentials*
+*service-account*
+*.env.local
+*.local.json
+
+# ----------------------------
+# Logs and debug output
+# ----------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----------------------------
+# Build / cache artifacts
+# ----------------------------
+.expo/
+.expo-shared/
+frontend/.expo/
+frontend/.expo-shared/
+
+web-build/
+dist/
+build/
+coverage/
+.tmp/
+tmp/
+
+# ----------------------------
+# OS / editor files
+# ----------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ----------------------------
+# Database / backup artifacts
+# ----------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+*.backup
+*.dump
+*.gz
