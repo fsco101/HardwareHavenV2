@@ -1,8 +1,28 @@
 // const expressjwt = require('express-jwt');
 const { expressjwt: jwt } = require("express-jwt");
+const jsonwebtoken = require('jsonwebtoken');
+
+function resolveAuth(req) {
+    if (req.auth && req.auth.userId) {
+        return req.auth;
+    }
+
+    const header = req.headers?.authorization || '';
+    const [scheme, token] = header.split(' ');
+    if (scheme !== 'Bearer' || !token) {
+        return null;
+    }
+
+    try {
+        return jsonwebtoken.verify(token, process.env.SECRET);
+    } catch {
+        return null;
+    }
+}
 
 function adminOnly(req, res, next) {
-    const auth = req.auth || {};
+    const auth = resolveAuth(req) || {};
+    req.auth = auth;
     if (!auth.isAdmin) {
         return res.status(403).json({ success: false, message: 'Admin access required' });
     }

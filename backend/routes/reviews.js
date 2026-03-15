@@ -5,6 +5,7 @@ const { Order } = require('../models/order');
 const { OrderItem } = require('../models/order-item');
 const mongoose = require('mongoose');
 const ProfanityFilter = require('../helpers/profanityFilter');
+const { adminOnly } = require('../helpers/jwt');
 const router = express.Router();
 
 const filter = new ProfanityFilter();
@@ -48,6 +49,77 @@ router.get('/product/:productId', async (req, res) => {
         res.send(reviews);
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET admin review management list
+router.get('/admin/manage', adminOnly, async (req, res) => {
+    try {
+        const search = String(req.query.search || '').trim();
+        const rating = Number(req.query.rating || 0);
+        const categoryId = String(req.query.category || '').trim();
+        const productId = String(req.query.product || '').trim();
+
+        const query = {};
+
+        if (rating >= 1 && rating <= 5) {
+            query.rating = rating;
+        }
+
+        let requestedProductId = null;
+        if (productId && mongoose.isValidObjectId(productId)) {
+            requestedProductId = productId;
+        }
+
+        const products = await Product.find(categoryId && mongoose.isValidObjectId(categoryId)
+            ? { category: categoryId }
+            : {})
+            .select('_id name category')
+            .populate('category', 'name');
+
+        const allowedProductIds = products.map((p) => p._id.toString());
+
+        if (categoryId && mongoose.isValidObjectId(categoryId)) {
+            if (requestedProductId) {
+                query.product = allowedProductIds.includes(String(requestedProductId))
+                    ? requestedProductId
+                    : { $in: [] };
+            } else {
+                query.product = { $in: allowedProductIds };
+            }
+        } else if (requestedProductId) {
+            query.product = requestedProductId;
+        }
+
+        const reviews = await Review.find(query)
+            .populate('user', 'name email image')
+            .populate({
+                path: 'product',
+                select: 'name category image',
+                populate: { path: 'category', select: 'name' },
+            })
+            .sort({ dateCreated: -1 });
+
+        const filtered = search
+            ? reviews.filter((review) => {
+                const userName = String(review?.user?.name || '').toLowerCase();
+                const userEmail = String(review?.user?.email || '').toLowerCase();
+                const productName = String(review?.product?.name || '').toLowerCase();
+                const comment = String(review?.comment || '').toLowerCase();
+                const term = search.toLowerCase();
+
+                return (
+                    userName.includes(term) ||
+                    userEmail.includes(term) ||
+                    productName.includes(term) ||
+                    comment.includes(term)
+                );
+            })
+            : reviews;
+
+        return res.json(filtered);
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 

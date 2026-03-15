@@ -15,7 +15,14 @@ app.use(cors());
 app.options("*", cors());
 
 // ─── Middleware ───
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/api/v1/orders/paymongo/webhook')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Morgan request logging with response time

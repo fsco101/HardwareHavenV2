@@ -25,6 +25,18 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+    deactivationReason: {
+        type: String,
+        default: ''
+    },
+    deactivatedAt: {
+        type: Date,
+        default: null,
+    },
     street: {
         type: String,
         default: ''

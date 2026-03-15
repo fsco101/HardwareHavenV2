@@ -7,6 +7,8 @@ const multer = require('multer');
 const { isExpoPushToken } = require('../helpers/pushNotifications');
 const crypto = require('crypto');
 const { sendEmail, passwordResetCodeEmail } = require('../helpers/emailService');
+const { adminOnly } = require('../helpers/jwt');
+const { verifyFirebaseIdToken } = require('../helpers/firebaseAdmin');
 
 const FILE_TYPE_MAP = {
     'image/png': 'png',
@@ -47,6 +49,13 @@ function getAuthFromRequest(req) {
     }
 }
 
+function getDeactivationPayload(user) {
+    return {
+        date: user?.deactivatedAt || null,
+        reason: user?.deactivationReason || 'No reason provided by admin.',
+    };
+}
+
 router.get(`/`, async (req, res) => {
     // const userList = await User.find();
     const userList = await User.find().select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires');
@@ -57,6 +66,99 @@ router.get(`/`, async (req, res) => {
     }
     res.send(userList);
 })
+
+router.get('/admin/manage', adminOnly, async (req, res) => {
+    try {
+        const search = String(req.query.search || '').trim();
+        const role = String(req.query.role || 'all').trim();
+        const status = String(req.query.status || 'all').trim();
+
+        const query = {};
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        if (role === 'admin') query.isAdmin = true;
+        if (role === 'user') query.isAdmin = false;
+
+        if (status === 'active') query.isActive = true;
+        if (status === 'inactive') query.isActive = false;
+
+        const users = await User.find(query)
+            .select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires')
+            .sort({ _id: -1 });
+
+        return res.json(users);
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/admin/:id/role', adminOnly, async (req, res) => {
+    try {
+        const role = String(req.body?.role || '').toLowerCase();
+        if (role !== 'admin' && role !== 'user') {
+            return res.status(400).json({ success: false, message: 'Role must be either user or admin.' });
+        }
+
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        user.isAdmin = role === 'admin';
+        await user.save();
+
+        const safeUser = await User.findById(user._id).select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires');
+        return res.json({ success: true, message: 'User role updated.', user: safeUser });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/admin/:id/status', adminOnly, async (req, res) => {
+    try {
+        const isActive = req.body?.isActive;
+        const deactivationReason = String(req.body?.deactivationReason || '').trim();
+        if (typeof isActive !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'isActive must be a boolean value.' });
+        }
+
+        if (isActive === false && !deactivationReason) {
+            return res.status(400).json({ success: false, message: 'Deactivation reason is required.' });
+        }
+
+        if (req.auth?.userId && String(req.auth.userId) === String(req.params.id) && isActive === false) {
+            return res.status(400).json({ success: false, message: 'You cannot deactivate your own admin account.' });
+        }
+
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        user.isActive = isActive;
+        if (isActive) {
+            user.deactivatedAt = null;
+            user.deactivationReason = '';
+        } else {
+            user.deactivatedAt = new Date();
+            user.deactivationReason = deactivationReason;
+        }
+        await user.save();
+
+        const safeUser = await User.findById(user._id).select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires');
+        return res.json({ success: true, message: `User ${isActive ? 'activated' : 'deactivated'}.`, user: safeUser });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 router.get('/:id', async (req, res) => {
     const user = await User.findById(req.params.id).select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires');
 
@@ -143,7 +245,16 @@ router.post('/login', async (req, res) => {
 
     const secret = process.env.SECRET;
     if (!user) {
-        return res.status(400).send('The user not found');
+        return res.status(400).json({ success: false, message: 'The user not found' });
+    }
+
+    if (user.isActive === false) {
+        return res.status(403).json({
+            success: false,
+            code: 'ACCOUNT_DEACTIVATED',
+            message: 'Your account is deactivated. Please contact admin.',
+            deactivation: getDeactivationPayload(user),
+        });
     }
 
     if (user && bcrypt.compareSync(req.body.password, user.passwordHash)) {
@@ -159,40 +270,64 @@ router.post('/login', async (req, res) => {
 
         res.status(200).send({ user: user.email, token: token })
     } else {
-        res.status(400).send('password is wrong!');
+        res.status(400).json({ success: false, message: 'password is wrong!' });
     }
 })
 
 // Firebase login — find or create user by Firebase UID, issue JWT
 router.post('/firebase-login', async (req, res) => {
-    const { email, firebaseUid, name } = req.body;
+    const { idToken, email, firebaseUid, name } = req.body;
     const secret = process.env.SECRET;
 
-    if (!email || !firebaseUid) {
-        return res.status(400).send('Email and firebaseUid are required');
+    let resolvedEmail = email;
+    let resolvedFirebaseUid = firebaseUid;
+    let resolvedName = name;
+
+    if (idToken) {
+        try {
+            const decodedToken = await verifyFirebaseIdToken(idToken);
+            resolvedFirebaseUid = decodedToken.uid;
+            resolvedEmail = decodedToken.email || resolvedEmail;
+            resolvedName = decodedToken.name || resolvedName;
+        } catch (error) {
+            return res.status(401).json({ success: false, message: 'Invalid Firebase ID token' });
+        }
     }
 
-    let user = await User.findOne({ firebaseUid });
+    if (!resolvedEmail || !resolvedFirebaseUid) {
+        return res.status(400).json({ success: false, message: 'Firebase credentials are required' });
+    }
+
+    let user = await User.findOne({ firebaseUid: resolvedFirebaseUid });
 
     // If user not found by UID, try by email
     if (!user) {
-        user = await User.findOne({ email });
+        user = await User.findOne({ email: resolvedEmail });
     }
 
     // If still no user, create a new one
     if (!user) {
         user = new User({
-            name: name || email.split('@')[0],
-            email,
-            passwordHash: bcrypt.hashSync(firebaseUid, 10),
+            name: resolvedName || resolvedEmail.split('@')[0],
+            email: resolvedEmail,
+            passwordHash: bcrypt.hashSync(resolvedFirebaseUid, 10),
             phone: '',
-            firebaseUid,
+            firebaseUid: resolvedFirebaseUid,
         });
         user = await user.save();
     } else if (!user.firebaseUid) {
         // Link existing account with Firebase UID
-        user.firebaseUid = firebaseUid;
+        user.firebaseUid = resolvedFirebaseUid;
         await user.save();
+    }
+
+    if (user.isActive === false) {
+        return res.status(403).json({
+            success: false,
+            code: 'ACCOUNT_DEACTIVATED',
+            message: 'Your account is deactivated. Please contact admin.',
+            deactivation: getDeactivationPayload(user),
+        });
     }
 
     const token = jwt.sign(

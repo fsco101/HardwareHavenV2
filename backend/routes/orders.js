@@ -4,12 +4,143 @@ const { Promotion } = require('../models/promotion');
 const { User } = require('../models/user');
 const { Notification } = require('../models/notification');
 const express = require('express');
+const crypto = require('crypto');
 const { OrderItem } = require('../models/order-item');
 const jwt = require('jsonwebtoken');
 const { sendEmail, orderStatusUpdateEmail, orderCancelledAdminEmail, orderCancelledUserEmail, orderPlacedEmail, orderDeliveredConfirmationAdminEmail } = require('../helpers/emailService');
 const { generateReceiptPDF } = require('../helpers/pdfReceipt');
 const { sendExpoPushNotifications } = require('../helpers/pushNotifications');
 const router = express.Router();
+
+function getPayMongoAuthHeader(secretKey) {
+    return `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`;
+}
+
+function isPayMongoTestModeOnly() {
+    return String(process.env.PAYMONGO_TEST_MODE_ONLY || '').toLowerCase() === 'true';
+}
+
+function normalizePayMongoEventType(eventType = '') {
+    return String(eventType || '').trim().toLowerCase();
+}
+
+function isPaidEventType(eventType = '') {
+    const type = normalizePayMongoEventType(eventType);
+    return type === 'payment.paid' || type === 'checkout_session.payment.paid';
+}
+
+function isFailedEventType(eventType = '') {
+    const type = normalizePayMongoEventType(eventType);
+    return type === 'payment.failed' || type === 'checkout_session.payment.failed' || type === 'checkout_session.expired';
+}
+
+function getWebhookSignatureHeader(req) {
+    return req.headers['paymongo-signature'] || req.headers['x-paymongo-signature'] || '';
+}
+
+function extractV1Signature(signatureHeader) {
+    const value = String(signatureHeader || '').trim();
+    if (!value) return '';
+
+    if (!value.includes('=')) {
+        return value;
+    }
+
+    const parts = value.split(',').map((part) => part.trim());
+    for (const part of parts) {
+        const [key, rawVal] = part.split('=');
+        if (String(key).trim().toLowerCase() === 'v1') {
+            return String(rawVal || '').trim();
+        }
+    }
+
+    return '';
+}
+
+function verifyWebhookSignature(req) {
+    const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET_KEY || process.env.PAYMONGO_WEBHOOK_SIGNING_SECRET || '';
+    if (!webhookSecret) {
+        return { ok: false, reason: 'Missing webhook signing secret' };
+    }
+
+    const rawBody = req.rawBody;
+    if (!rawBody || !Buffer.isBuffer(rawBody) || rawBody.length === 0) {
+        return { ok: false, reason: 'Missing raw request body' };
+    }
+
+    const signatureHeader = getWebhookSignatureHeader(req);
+    const expectedSignature = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+    const providedSignature = extractV1Signature(signatureHeader);
+
+    if (!providedSignature || providedSignature.length !== expectedSignature.length) {
+        return { ok: false, reason: 'Invalid signature header' };
+    }
+
+    const isMatch = crypto.timingSafeEqual(
+        Buffer.from(providedSignature, 'utf8'),
+        Buffer.from(expectedSignature, 'utf8')
+    );
+
+    return isMatch ? { ok: true } : { ok: false, reason: 'Signature mismatch' };
+}
+
+function resolveOrderIdFromWebhook(payload = {}) {
+    const attributes = payload?.data?.attributes || {};
+    const dataObject = attributes.data?.attributes || {};
+    const metadata = dataObject.metadata || attributes.metadata || {};
+
+    return (
+        metadata.orderId ||
+        metadata.order_id ||
+        dataObject.reference_number ||
+        attributes.reference_number ||
+        ''
+    );
+}
+
+async function updateOrderPaymentStatusFromEvent(payload = {}) {
+    const eventType = payload?.data?.attributes?.type || '';
+    const paid = isPaidEventType(eventType);
+    const failed = isFailedEventType(eventType);
+
+    if (!paid && !failed) {
+        return { handled: false, reason: `Unsupported event type: ${eventType}` };
+    }
+
+    const nextPaymentStatus = paid ? 'Paid' : 'Failed';
+    const orderId = resolveOrderIdFromWebhook(payload);
+    const sessionIdFromPayload = (
+        payload?.data?.attributes?.data?.id ||
+        payload?.data?.attributes?.data?.attributes?.checkout_session_id ||
+        ''
+    );
+
+    let order = null;
+    if (orderId) {
+        order = await Order.findByIdAndUpdate(
+            orderId,
+            { paymentStatus: nextPaymentStatus },
+            { new: true }
+        );
+    }
+
+    if (!order && sessionIdFromPayload) {
+        order = await Order.findOneAndUpdate(
+            { paymentId: sessionIdFromPayload },
+            { paymentStatus: nextPaymentStatus },
+            { new: true }
+        );
+    }
+
+    if (!order) {
+        return {
+            handled: false,
+            reason: `Order not found for orderId=${orderId || 'n/a'} sessionId=${sessionIdFromPayload || 'n/a'}`,
+        };
+    }
+
+    return { handled: true, orderId: String(order._id), paymentStatus: order.paymentStatus, eventType };
+}
 
 // Helper to get the io instance attached in app.js
 function getIO(req) {
@@ -74,7 +205,7 @@ router.get(`/`, async (req, res) => {
     res.status(200).json(orderList)
 })
 
-router.get(`/:id`, async (req, res) => {
+router.get('/:id([0-9a-fA-F]{24})', async (req, res) => {
     const order = await Order.findById(req.params.id)
         .populate('user', 'name email')
         .populate({
@@ -211,6 +342,13 @@ router.post('/', async (req, res) => {
             try {
                 const paymongoKey = process.env.PAYMONGO_SECRET_KEY;
                 if (paymongoKey) {
+                    if (isPayMongoTestModeOnly() && !String(paymongoKey).startsWith('sk_test_')) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'PAYMONGO_TEST_MODE_ONLY is enabled. Please use a test secret key (sk_test_...).',
+                        });
+                    }
+
                     const lineItems = requestedItems.map((item) => {
                         const product = productMap.get(String(item.product));
                         const promo = promotionMap.get(String(item.product));
@@ -224,12 +362,24 @@ router.post('/', async (req, res) => {
                         };
                     });
 
-                    const apiBase = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 4000}`;
+                    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+                    const requestProtocol = forwardedProto || req.protocol || 'http';
+                    const requestHost = req.get('host') || '';
+                    const requestBase = requestHost ? `${requestProtocol}://${requestHost}` : '';
+                    const defaultLocalBase = `http://localhost:${process.env.PORT || 4000}`;
+                    const rawApiBase = String(process.env.API_BASE_URL || requestBase || defaultLocalBase).trim().replace(/\/+$/, '');
+                    const fallbackRedirectBase = String(process.env.PAYMONGO_REDIRECT_BASE_URL || 'https://example.com').trim().replace(/\/+$/, '');
+                    const isLocalOrHttpBase =
+                        /^http:\/\//i.test(rawApiBase) ||
+                        /localhost|127\.0\.0\.1|0\.0\.0\.0|::1/i.test(rawApiBase);
+
+                    // PayMongo requires public HTTPS callback URLs. When running locally, use a configurable HTTPS fallback.
+                    const redirectBase = isLocalOrHttpBase ? fallbackRedirectBase : rawApiBase;
                     const response = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Basic ${Buffer.from(paymongoKey + ':').toString('base64')}`,
+                            'Authorization': getPayMongoAuthHeader(paymongoKey),
                         },
                         body: JSON.stringify({
                             data: {
@@ -238,16 +388,25 @@ router.post('/', async (req, res) => {
                                     show_description: true,
                                     show_line_items: true,
                                     description: `HardwareHaven Order #${order._id}`,
+                                    reference_number: String(order._id),
+                                    metadata: {
+                                        orderId: String(order._id),
+                                    },
                                     line_items: lineItems,
                                     payment_method_types: ['gcash', 'grab_pay'],
-                                    success_url: `${apiBase}/api/v1/orders/payment-success?orderId=${order._id}`,
-                                    cancel_url: `${apiBase}/api/v1/orders/payment-cancel?orderId=${order._id}`,
+                                    success_url: `${redirectBase}/api/v1/orders/payment-success?orderId=${order._id}`,
+                                    cancel_url: `${redirectBase}/api/v1/orders/payment-cancel?orderId=${order._id}`,
                                 },
                             },
                         }),
                     });
 
                     const paymongoData = await response.json();
+                    if (!response.ok) {
+                        const paymongoMessage = paymongoData?.errors?.[0]?.detail || 'Failed to create PayMongo checkout session';
+                        return res.status(502).json({ success: false, message: paymongoMessage });
+                    }
+
                     if (paymongoData.data) {
                         order.paymentId = paymongoData.data.id;
                         await order.save();
@@ -256,9 +415,23 @@ router.post('/', async (req, res) => {
                             checkoutUrl: paymongoData.data.attributes.checkout_url,
                         });
                     }
+
+                    return res.status(502).json({
+                        success: false,
+                        message: 'PayMongo checkout session was not created.',
+                    });
                 }
+
+                return res.status(400).json({
+                    success: false,
+                    message: 'PAYMONGO_SECRET_KEY is not configured.',
+                });
             } catch (payErr) {
                 console.error('PayMongo error:', payErr.message);
+                return res.status(502).json({
+                    success: false,
+                    message: payErr.message || 'PayMongo checkout session failed.',
+                });
             }
         }
 
@@ -275,12 +448,18 @@ router.get('/payment-success', async (req, res) => {
     if (orderId) {
         await Order.findByIdAndUpdate(orderId, { paymentStatus: 'Paid' });
     }
+
+    const appScheme = String(process.env.PAYMONGO_APP_SCHEME || '').trim();
+    const deepLink = appScheme ? `${appScheme}://payment/success?orderId=${encodeURIComponent(String(orderId || ''))}` : '';
+
     res.send(`
         <html><body style="background:#1a1a2e;color:#e8e8e8;font-family:Arial;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
             <div style="text-align:center;">
                 <h1 style="color:#2ecc71;">Payment Successful!</h1>
                 <p>You can now return to the HardwareHaven app.</p>
+                ${deepLink ? `<p><a href="${deepLink}" style="color:#00b4d8;">Open HardwareHaven App</a></p>` : ''}
             </div>
+            ${deepLink ? `<script>setTimeout(function(){ window.location.href='${deepLink}'; }, 1200);</script>` : ''}
         </body></html>
     `);
 });
@@ -291,14 +470,40 @@ router.get('/payment-cancel', async (req, res) => {
     if (orderId) {
         await Order.findByIdAndUpdate(orderId, { paymentStatus: 'Failed' });
     }
+
+    const appScheme = String(process.env.PAYMONGO_APP_SCHEME || '').trim();
+    const deepLink = appScheme ? `${appScheme}://payment/cancel?orderId=${encodeURIComponent(String(orderId || ''))}` : '';
+
     res.send(`
         <html><body style="background:#1a1a2e;color:#e8e8e8;font-family:Arial;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
             <div style="text-align:center;">
                 <h1 style="color:#e74c3c;">Payment Cancelled</h1>
                 <p>You can return to the HardwareHaven app and try again.</p>
+                ${deepLink ? `<p><a href="${deepLink}" style="color:#00b4d8;">Open HardwareHaven App</a></p>` : ''}
             </div>
+            ${deepLink ? `<script>setTimeout(function(){ window.location.href='${deepLink}'; }, 1200);</script>` : ''}
         </body></html>
     `);
+});
+
+// PayMongo webhook callback
+router.post('/paymongo/webhook', async (req, res) => {
+    try {
+        const verification = verifyWebhookSignature(req);
+        if (!verification.ok) {
+            return res.status(401).json({ success: false, message: `Invalid webhook signature: ${verification.reason}` });
+        }
+
+        const result = await updateOrderPaymentStatusFromEvent(req.body || {});
+        if (!result.handled) {
+            return res.status(200).json({ success: true, ignored: true, reason: result.reason });
+        }
+
+        return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        console.error('PayMongo webhook error:', error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // Verify payment status
@@ -312,7 +517,7 @@ router.get('/verify-payment/:id', async (req, res) => {
             try {
                 const response = await fetch(`https://api.paymongo.com/v1/checkout_sessions/${order.paymentId}`, {
                     headers: {
-                        'Authorization': `Basic ${Buffer.from(process.env.PAYMONGO_SECRET_KEY + ':').toString('base64')}`,
+                        'Authorization': getPayMongoAuthHeader(process.env.PAYMONGO_SECRET_KEY),
                     },
                 });
                 const data = await response.json();
