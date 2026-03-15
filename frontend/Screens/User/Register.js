@@ -17,7 +17,7 @@ import Error from "../../Shared/Error";
 import CustomDropdown from "../../Shared/CustomDropdown";
 import axios from "axios";
 import baseURL from "../../config/api";
-import Toast from "react-native-toast-message";
+import Toast from '../../Shared/SnackbarService';
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from '../../Theme/theme';
 import { validateForm, hasErrors } from '../../Shared/FormValidation';

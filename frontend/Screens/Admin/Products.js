@@ -15,7 +15,7 @@ import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import { useNavigation } from "@react-navigation/native"
 import { useTheme } from '../../Theme/theme';
 import SweetAlert from '../../Shared/SweetAlert';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 import { useResponsive } from '../../assets/common/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 import { deleteProduct as deleteProductAction, fetchProducts } from '../../Redux/Actions/productActions';
@@ -145,6 +145,14 @@ const Products = (props) => {
                 <EasyButton secondary medium onPress={() => navigation.navigate("Categories")}>
                     <Ionicons name="add-outline" size={18} color="white" />
                     <Text style={styles.buttonText}>Categories</Text>
+                </EasyButton>
+                <EasyButton secondary medium onPress={() => navigation.navigate("User Management")}>
+                    <Ionicons name="people-outline" size={18} color="white" />
+                    <Text style={styles.buttonText}>Users</Text>
+                </EasyButton>
+                <EasyButton secondary medium onPress={() => navigation.navigate("Review Management")}>
+                    <Ionicons name="chatbubbles-outline" size={18} color="white" />
+                    <Text style={styles.buttonText}>Reviews</Text>
                 </EasyButton>
             </View>
             <Searchbar

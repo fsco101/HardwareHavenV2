@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Linking, Activity
 import { Avatar } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux'
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 import { clearCart } from '../../Redux/Actions/cartActions';
 import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,11 @@ const Confirm = (props) => {
     const colors = useTheme();
     const [showSuccess, setShowSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
     const { fs, ms, spacing, ws } = useResponsive();
 
     // Support both legacy nested payload and normalized payload.
@@ -68,10 +73,14 @@ const Confirm = (props) => {
             const result = await dispatch(createOrder(orderPayload, token));
 
             if (result.success && result.data) {
-                // If online payment and checkout URL returned, open it
-                if (paymentMethod === 'Online' && result.data.checkoutUrl) {
+                if (paymentMethod === 'Online') {
+                    const checkoutUrl = String(result.data.checkoutUrl || '').trim();
+                    if (!checkoutUrl) {
+                        throw new Error('PayMongo checkout session was not created. Please check backend PayMongo settings and try again.');
+                    }
+
                     dispatch(clearCart());
-                    await Linking.openURL(result.data.checkoutUrl);
+                    await Linking.openURL(checkoutUrl);
                     Toast.show({
                         topOffset: 60,
                         type: "info",
@@ -151,7 +160,7 @@ const Confirm = (props) => {
                         {order.orderItems.map((item, index) => (
                             <View key={item.id || item._id || index} style={[styles.itemRow, { borderBottomColor: colors.border, paddingVertical: spacing.sm }]}>
                                 <Avatar.Image size={ms(40, 0.3)} source={{
-                                    uri: item.image ? item.image : 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png'
+                                    uri: cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '') || fallbackImage
                                 }} />
                                 <View style={{ flex: 1, marginLeft: spacing.sm + 2 }}>
                                     <Text style={{ color: colors.text, fontSize: fs(14) }}>{item.name}</Text>

@@ -7,7 +7,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigation } from '@react-navigation/native';
 import AuthGlobal from '../../Context/Store/AuthGlobal'
-import Toast from 'react-native-toast-message'
+import Toast from '../../Shared/SnackbarService';
 import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { validateForm, hasErrors } from '../../Shared/FormValidation';

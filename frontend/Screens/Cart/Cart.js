@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from '../../Theme/theme';
 import SweetAlert from '../../Shared/SweetAlert';
 import { useResponsive } from '../../assets/common/responsive';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 
 const Cart = () => {
     const navigation = useNavigation()
@@ -19,6 +19,11 @@ const Cart = () => {
     const [showClearAlert, setShowClearAlert] = useState(false);
     const [quantityDrafts, setQuantityDrafts] = useState({});
     const { fs, spacing, ms, ws } = useResponsive();
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
 
     var total = 0;
     cartItems.forEach(cart => {
@@ -81,8 +86,7 @@ const Cart = () => {
         <TouchableHighlight underlayColor={colors.surfaceLight}>
             <View style={[styles.cartItem, { backgroundColor: colors.surface, borderBottomColor: colors.border, padding: spacing.sm + 4 }]}>
                 <Avatar.Image size={ms(48, 0.3)} source={{
-                    uri: item.image ?
-                        item.image : 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png'
+                    uri: cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '') || fallbackImage
                 }} />
                 <View style={{ flex: 1, marginLeft: spacing.sm + 4 }}>
                     <Text style={{ color: colors.text, fontWeight: '600', fontSize: fs(15) }}>

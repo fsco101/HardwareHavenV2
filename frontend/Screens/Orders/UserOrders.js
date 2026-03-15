@@ -5,7 +5,7 @@ import AuthGlobal from '../../Context/Store/AuthGlobal';
 import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useResponsive } from '../../assets/common/responsive';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 import SweetAlert from '../../Shared/SweetAlert';
 import { useDispatch, useSelector } from 'react-redux';
 import { cancelOrder, confirmOrderDelivery, fetchMyOrders } from '../../Redux/Actions/orderActions';

@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import TrafficLight from "./StyledComponents/TrafficLight";
 import EasyButton from "./StyledComponents/EasyButton";
-import Toast from "react-native-toast-message";
+import Toast from './SnackbarService';
 import { Picker } from "@react-native-picker/picker";
 import { useTheme } from '../Theme/theme';
 

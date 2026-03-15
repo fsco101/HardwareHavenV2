@@ -1,10 +1,11 @@
-// ─── Cloudinary Configuration ───
-// Replace these values with your actual Cloudinary credentials.
-// Get them from: Cloudinary Dashboard → Account Details
+import Constants from 'expo-constants';
+
+const extra = Constants.expoConfig?.extra || {};
+
 const CLOUDINARY_CONFIG = {
-    cloudName: 'YOUR_CLOUD_NAME',
-    uploadPreset: 'YOUR_UNSIGNED_UPLOAD_PRESET', // Create an unsigned upload preset in Cloudinary Settings → Upload
-    apiKey: 'YOUR_API_KEY',
+    cloudName: extra.CLOUDINARY_CLOUD_NAME || process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || '',
+    uploadPreset: extra.CLOUDINARY_UPLOAD_PRESET || process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '',
+    apiKey: extra.CLOUDINARY_API_KEY || process.env.EXPO_PUBLIC_CLOUDINARY_API_KEY || '',
 };
 
 export default CLOUDINARY_CONFIG;

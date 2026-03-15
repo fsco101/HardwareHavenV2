@@ -12,7 +12,7 @@ import { useTheme } from '../../Theme/theme';
 import { useResponsive } from '../../assets/common/responsive';
 import { formatPHDate } from '../../assets/common/phTime';
 import SweetAlert from '../../Shared/SweetAlert';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
 import PromotionCountdown from '../../Shared/PromotionCountdown';
 import { getToken } from '../../assets/common/tokenStorage';
@@ -33,6 +33,7 @@ const TARGET_OPTIONS = [
     { label: 'All Users', value: 'all' },
     { label: 'Top Buyers', value: 'top_buyers' },
     { label: 'Big Spenders', value: 'big_spenders' },
+    { label: 'Specific Users', value: 'specific' },
 ];
 
 const Promotions = () => {
@@ -52,6 +53,9 @@ const Promotions = () => {
     const [discountedPrice, setDiscountedPrice] = useState('');
     const [duration, setDuration] = useState(30);
     const [targetUsers, setTargetUsers] = useState('all');
+    const [allUsers, setAllUsers] = useState([]);
+    const [specificUserSearch, setSpecificUserSearch] = useState('');
+    const [selectedSpecificUsers, setSelectedSpecificUsers] = useState([]);
     const [discountError, setDiscountError] = useState('');
 
     // Active promotions
@@ -63,6 +67,11 @@ const Promotions = () => {
     // Alert
     const [alertVisible, setAlertVisible] = useState(false);
     const [deactivateId, setDeactivateId] = useState(null);
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
 
     const getAuthConfig = useCallback(async () => {
         const token = await getToken();
@@ -76,14 +85,19 @@ const Promotions = () => {
         setLoading(true);
         try {
             const authConfig = await getAuthConfig();
-            const [prodRes, catRes, promoRes] = await Promise.all([
+            const [prodRes, catRes, promoRes, usersRes] = await Promise.all([
                 axios.get(`${baseURL}products`),
                 axios.get(`${baseURL}categories`),
                 axios.get(`${baseURL}promotions/admin/all`, authConfig),
+                axios.get(`${baseURL}users`, authConfig),
             ]);
             setProducts(prodRes.data);
             setCategories(catRes.data);
             setPromotions(promoRes.data);
+            const nonAdminUsers = Array.isArray(usersRes.data)
+                ? usersRes.data.filter((u) => u && !u.isAdmin)
+                : [];
+            setAllUsers(nonAdminUsers);
         } catch (err) {
             const message = err.response?.data?.message || err.message;
             console.log('Promotions fetch error:', message);
@@ -107,6 +121,21 @@ const Promotions = () => {
         return matchesSearch && matchesCat;
     });
 
+    const filteredSpecificUsers = allUsers.filter((u) => {
+        const keyword = specificUserSearch.trim().toLowerCase();
+        if (!keyword) return true;
+
+        const name = String(u?.name || '').toLowerCase();
+        const email = String(u?.email || '').toLowerCase();
+        return name.includes(keyword) || email.includes(keyword);
+    });
+
+    const toggleSpecificUser = (id) => {
+        setSelectedSpecificUsers((prev) => (
+            prev.includes(id) ? prev.filter((uid) => uid !== id) : [...prev, id]
+        ));
+    };
+
     const handleCreate = async () => {
         if (!selectedProduct) {
             Toast.show({ topOffset: 60, type: 'error', text1: 'Please select a product' });
@@ -127,6 +156,11 @@ const Promotions = () => {
             return;
         }
 
+        if (targetUsers === 'specific' && selectedSpecificUsers.length === 0) {
+            Toast.show({ topOffset: 60, type: 'error', text1: 'Select at least one specific user' });
+            return;
+        }
+
         setCreating(true);
         try {
             const authConfig = await getAuthConfig();
@@ -135,12 +169,16 @@ const Promotions = () => {
                 discountedPrice: dp,
                 durationMinutes: duration,
                 targetUsers,
+                specificUsers: targetUsers === 'specific' ? selectedSpecificUsers : [],
                 createdBy: userId,
             }, authConfig);
             Toast.show({ topOffset: 60, type: 'success', text1: 'Promotion created!', text2: 'Notifications sent to users' });
             setSelectedProduct(null);
             setDiscountedPrice('');
             setDiscountError('');
+            setTargetUsers('all');
+            setSpecificUserSearch('');
+            setSelectedSpecificUsers([]);
             setTab('active');
             fetchData();
         } catch (err) {
@@ -248,7 +286,7 @@ const Promotions = () => {
                                     }]}
                                     onPress={() => { setSelectedProduct(item); setDiscountedPrice(''); }}
                                 >
-                                    <Image source={{ uri: item.image || 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png' }} style={styles.productThumb} />
+                                    <Image source={{ uri: cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '') || fallbackImage }} style={styles.productThumb} />
                                     <View style={{ flex: 1, marginLeft: 8 }}>
                                         <Text style={{ color: colors.text, fontWeight: '600', fontSize: fs(13) }} numberOfLines={1}>{item.name}</Text>
                                         <Text style={{ color: colors.accent, fontSize: fs(12) }}>₱{item.price}</Text>
@@ -328,6 +366,59 @@ const Promotions = () => {
                             </TouchableOpacity>
                         ))}
                     </View>
+
+                    {targetUsers === 'specific' ? (
+                        <View style={[styles.specificUsersPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                            <TextInput
+                                style={[styles.userSearchInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text, fontSize: fs(14) }]}
+                                placeholder="Search users by name or email"
+                                placeholderTextColor={colors.textSecondary}
+                                value={specificUserSearch}
+                                onChangeText={setSpecificUserSearch}
+                            />
+
+                            <Text style={{ color: colors.textSecondary, fontSize: fs(12), marginBottom: 6 }}>
+                                Selected: {selectedSpecificUsers.length}
+                            </Text>
+
+                            <View style={styles.specificUsersList}>
+                                <ScrollView nestedScrollEnabled>
+                                    {filteredSpecificUsers.length === 0 ? (
+                                        <Text style={{ color: colors.textSecondary, fontSize: fs(12) }}>No matching users found</Text>
+                                    ) : (
+                                        filteredSpecificUsers.map((u) => {
+                                            const userIdValue = u?._id;
+                                            const isSelected = selectedSpecificUsers.includes(userIdValue);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={userIdValue}
+                                                    style={[styles.userRow, {
+                                                        backgroundColor: isSelected ? colors.surfaceLight : 'transparent',
+                                                        borderColor: colors.border,
+                                                    }]}
+                                                    onPress={() => toggleSpecificUser(userIdValue)}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={{ color: colors.text, fontSize: fs(13), fontWeight: isSelected ? '600' : '400' }} numberOfLines={1}>
+                                                            {u?.name || 'Unnamed User'}
+                                                        </Text>
+                                                        <Text style={{ color: colors.textSecondary, fontSize: fs(11) }} numberOfLines={1}>
+                                                            {u?.email || 'No email'}
+                                                        </Text>
+                                                    </View>
+                                                    <Ionicons
+                                                        name={isSelected ? 'checkbox' : 'square-outline'}
+                                                        size={20}
+                                                        color={isSelected ? colors.secondary : colors.textSecondary}
+                                                    />
+                                                </TouchableOpacity>
+                                            );
+                                        })
+                                    )}
+                                </ScrollView>
+                            </View>
+                        </View>
+                    ) : null}
 
                     {/* Submit */}
                     <TouchableOpacity
@@ -416,6 +507,10 @@ const styles = StyleSheet.create({
     priceInput: { borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 4 },
     durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
     durChip: { paddingHorizontal: 12, paddingVertical: 8 },
+    specificUsersPanel: { borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 8, marginBottom: 6 },
+    userSearchInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 8 },
+    specificUsersList: { maxHeight: 180 },
+    userRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, padding: 8, marginBottom: 6 },
     createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 10 },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
     promoCard: { padding: 12, borderRadius: 10, borderLeftWidth: 4, marginBottom: 10, elevation: 2 },

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { addToCart } from '../../Redux/Actions/cartActions'
 import { fetchReviews, createReview, updateReview } from '../../Redux/Actions/reviewActions'
 import { useDispatch, useSelector } from 'react-redux'
-import Toast from 'react-native-toast-message'
+import Toast from '../../Shared/SnackbarService';
 import { useResponsive } from '../../assets/common/responsive';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
 import { usePromotions } from '../../Context/Store/PromotionContext';
@@ -41,6 +41,12 @@ const SingleProduct = ({ route }) => {
 
     const promo = getPromoForProduct(item._id || item.id);
     const displayPrice = promo ? promo.discountedPrice : item.price;
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const imageUri = cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '');
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
 
     // Reviews state
     const { reviews, error: reviewError } = useSelector((state) => state.reviews);
@@ -143,7 +149,7 @@ const SingleProduct = ({ route }) => {
                 <View style={[styles.imageContainer, { backgroundColor: colors.surface, borderRadius: ws(12), padding: spacing.sm, margin: spacing.sm }]}>
                     <Image
                         source={{
-                            uri: item.image ? item.image : 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png'
+                            uri: imageUri || fallbackImage
                         }}
                         resizeMode="contain"
                         style={[styles.image, { height: hp(30) }]}

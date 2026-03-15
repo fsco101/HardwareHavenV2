@@ -29,7 +29,7 @@ import {
     LoadingSkeleton,
 } from '../../Shared/Dashboard';
 import { buildDashboardAnalytics } from '../../Shared/Dashboard/analyticsUtils';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 
 const parseWebDateTime = (input) => {
     if (!input) return null;
@@ -254,12 +254,20 @@ const Dashboard = () => {
                     <Text style={[styles.navBtnText, { color: colors.textOnPrimary, fontSize: fs(12) }]}>Orders</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.navBtn, { backgroundColor: colors.accent }]} onPress={() => navigation.navigate('Categories')}> 
-                    <Ionicons name="list-outline" size={16} color="#1a1a2e" />
-                    <Text style={[styles.navBtnText, { color: '#1a1a2e', fontSize: fs(12) }]}>Categories</Text>
+                    <Ionicons name="list-outline" size={16} color={colors.headerBg} />
+                    <Text style={[styles.navBtnText, { color: colors.headerBg, fontSize: fs(12) }]}>Categories</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.navBtn, { backgroundColor: colors.success }]} onPress={() => navigation.navigate('Promotions')}> 
                     <Ionicons name="pricetag-outline" size={16} color={colors.textOnPrimary} />
                     <Text style={[styles.navBtnText, { color: colors.textOnPrimary, fontSize: fs(12) }]}>Promos</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.navBtn, { backgroundColor: colors.secondary }]} onPress={() => navigation.navigate('User Management')}> 
+                    <Ionicons name="people-outline" size={16} color={colors.textOnPrimary} />
+                    <Text style={[styles.navBtnText, { color: colors.textOnPrimary, fontSize: fs(12) }]}>Users</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.navBtn, { backgroundColor: colors.primary }]} onPress={() => navigation.navigate('Review Management')}> 
+                    <Ionicons name="chatbubbles-outline" size={16} color={colors.textOnPrimary} />
+                    <Text style={[styles.navBtnText, { color: colors.textOnPrimary, fontSize: fs(12) }]}>Reviews</Text>
                 </TouchableOpacity>
             </View>
 

@@ -19,6 +19,12 @@ const ListItem = ({ item, index, deleteProduct }) => {
     const colors = useTheme();
     const { width, fs, spacing, ms, ws, deviceType } = useResponsive();
     const isMobile = deviceType === 'mobile';
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const imageUri = cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '');
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
 
     return (
         <View>
@@ -47,9 +53,22 @@ const ListItem = ({ item, index, deleteProduct }) => {
                         <EasyButton
                             medium
                             danger
-                            onPress={() => [deleteProduct(item.id), setModalVisible(false)]}
+                            onPress={() => [deleteProduct(item.id || item._id), setModalVisible(false)]}
                         >
                             <Text style={styles.textStyle}>Delete</Text>
+                        </EasyButton>
+                        <EasyButton
+                            medium
+                            secondary
+                            onPress={() => [
+                                navigation.navigate('Review Management', {
+                                    productId: item?._id || item?.id,
+                                    productName: item?.name || '',
+                                }),
+                                setModalVisible(false),
+                            ]}
+                        >
+                            <Text style={styles.textStyle}>Reviews</Text>
                         </EasyButton>
                     </View>
                 </View>
@@ -67,13 +86,13 @@ const ListItem = ({ item, index, deleteProduct }) => {
                 ]}
             >
                 <Image
-                    source={{ uri: item.image ? item.image : null }}
+                    source={{ uri: imageUri || fallbackImage }}
                     resizeMode="contain"
                     style={[
                         styles.image,
                         isMobile
                             ? { width: ws(68), height: ws(68), borderRadius: ws(10) }
-                            : { width: width / 6 },
+                            : { width: width / 6, height: ws(56), borderRadius: 8 },
                     ]}
                 />
                 {isMobile ? (
@@ -93,10 +112,20 @@ const ListItem = ({ item, index, deleteProduct }) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.mobileActionBtn, { backgroundColor: colors.danger }]}
-                                onPress={() => deleteProduct(item.id)}
+                                onPress={() => deleteProduct(item.id || item._id)}
                             >
                                 <Ionicons name="trash-outline" size={14} color={colors.textOnPrimary} />
                                 <Text style={{ color: colors.textOnPrimary, fontSize: fs(12), fontWeight: '700', marginLeft: 4 }}>Delete</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.mobileActionBtn, { backgroundColor: colors.primary }]}
+                                onPress={() => navigation.navigate('Review Management', {
+                                    productId: item?._id || item?.id,
+                                    productName: item?.name || '',
+                                })}
+                            >
+                                <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.textOnPrimary} />
+                                <Text style={{ color: colors.textOnPrimary, fontSize: fs(12), fontWeight: '700', marginLeft: 4 }}>Reviews</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -115,9 +144,18 @@ const ListItem = ({ item, index, deleteProduct }) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.actionIconBtn, { backgroundColor: colors.danger }]}
-                                onPress={() => deleteProduct(item.id)}
+                                onPress={() => deleteProduct(item.id || item._id)}
                             >
                                 <Ionicons name="trash-outline" size={14} color={colors.textOnPrimary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionIconBtn, { backgroundColor: colors.primary }]}
+                                onPress={() => navigation.navigate('Review Management', {
+                                    productId: item?._id || item?.id,
+                                    productName: item?.name || '',
+                                })}
+                            >
+                                <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.textOnPrimary} />
                             </TouchableOpacity>
                         </View>
                     </>

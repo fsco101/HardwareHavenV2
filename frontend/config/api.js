@@ -95,8 +95,8 @@ const baseURL = envApiURL || configHostURL || fallbackApiURL;
 
 if (__DEV__) {
     if (!envApiURL && !configHostURL) {
-        console.log('[API] API config not found in frontend/config/.env. Using fallback:', baseURL);
-        console.log('[API] Set API_HOST and API_PORT in frontend/config/.env (API_HOST can be auto)');
+        console.log('[API] API config not found in frontend/.env. Using fallback:', baseURL);
+        console.log('[API] Set API_HOST and API_PORT in frontend/.env (API_HOST can be auto)');
     } else {
         console.log('[API] baseURL:', baseURL);
     }

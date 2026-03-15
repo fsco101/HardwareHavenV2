@@ -11,7 +11,7 @@ import SweetAlert from '../../Shared/SweetAlert';
 import { useResponsive } from '../../assets/common/responsive';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadToCloudinary } from '../../assets/common/cloudinaryUpload';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 import CustomDropdown from '../../Shared/CustomDropdown';
 import {
     findPsgcRegionByNameOrDesignation,

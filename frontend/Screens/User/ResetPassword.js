@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import axios from 'axios';
-import Toast from 'react-native-toast-message';
 import baseURL from '../../config/api';
 import { useTheme } from '../../Theme/theme';
 import { useResponsive } from '../../assets/common/responsive';
 import Error from '../../Shared/Error';
 import { validateForm, hasErrors } from '../../Shared/FormValidation';
+import SweetAlert from '../../Shared/SweetAlert';
 
 const ResetPassword = ({ navigation }) => {
     const colors = useTheme();
@@ -21,6 +21,14 @@ const ResetPassword = ({ navigation }) => {
     const [loadingSend, setLoadingSend] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
     const [resendCooldown, setResendCooldown] = useState(0);
+    const [step, setStep] = useState('request');
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        type: 'info',
+        title: '',
+        message: '',
+        navigateToLogin: false,
+    });
 
     useEffect(() => {
         if (resendCooldown <= 0) return;
@@ -42,12 +50,37 @@ const ResetPassword = ({ navigation }) => {
         setFieldErrors((prev) => ({ ...prev, [field]: '' }));
     };
 
+    const showAlert = ({ type = 'info', title = '', message = '', navigateToLogin = false }) => {
+        setAlertConfig({
+            visible: true,
+            type,
+            title,
+            message,
+            navigateToLogin,
+        });
+    };
+
+    const closeAlert = () => {
+        const shouldNavigateToLogin = alertConfig.navigateToLogin;
+        setAlertConfig({
+            visible: false,
+            type: 'info',
+            title: '',
+            message: '',
+            navigateToLogin: false,
+        });
+
+        if (shouldNavigateToLogin) {
+            navigation.navigate('Login');
+        }
+    };
+
     const sendResetCode = async () => {
         if (resendCooldown > 0) {
-            Toast.show({
-                topOffset: 60,
+            showAlert({
                 type: 'info',
-                text1: `Please wait ${resendCooldown}s before resending`,
+                title: 'Please wait',
+                message: `Please wait ${resendCooldown}s before resending the code.`,
             });
             return;
         }
@@ -56,26 +89,25 @@ const ResetPassword = ({ navigation }) => {
         const errors = validateForm({ email: normalizedEmail });
         setFieldErrors((prev) => ({ ...prev, email: errors.email || '' }));
         if (errors.email) {
-            Toast.show({ topOffset: 60, type: 'error', text1: errors.email });
+            showAlert({ type: 'error', title: 'Invalid Email', message: errors.email });
             return;
         }
 
         setLoadingSend(true);
         try {
             await axios.post(`${baseURL}users/forgot-password`, { email: normalizedEmail });
-            Toast.show({
-                topOffset: 60,
+            setStep('reset');
+            showAlert({
                 type: 'success',
-                text1: 'Reset code sent',
-                text2: 'Check your Gmail inbox for the verification code.',
+                title: 'Reset Code Sent',
+                message: 'Check your email inbox for the verification code, then continue to step 2.',
             });
             setResendCooldown(60);
         } catch (error) {
-            Toast.show({
-                topOffset: 60,
+            showAlert({
                 type: 'error',
-                text1: 'Failed to send code',
-                text2: error.response?.data?.message || 'Please try again',
+                title: 'Failed to Send Code',
+                message: error.response?.data?.message || 'Please try again.',
             });
         } finally {
             setLoadingSend(false);
@@ -83,6 +115,15 @@ const ResetPassword = ({ navigation }) => {
     };
 
     const resetPassword = async () => {
+        if (step !== 'reset') {
+            showAlert({
+                type: 'warning',
+                title: 'Complete Step 1 First',
+                message: 'Send a reset code to your email before resetting the password.',
+            });
+            return;
+        }
+
         const normalizedEmail = email.trim().toLowerCase();
         const errors = validateForm({
             email: normalizedEmail,
@@ -93,7 +134,7 @@ const ResetPassword = ({ navigation }) => {
         setFieldErrors(errors);
         if (hasErrors(errors)) {
             const firstError = errors.email || errors.resetCode || errors.newPassword || errors.confirmPassword;
-            Toast.show({ topOffset: 60, type: 'error', text1: firstError || 'Please fix form errors' });
+            showAlert({ type: 'error', title: 'Validation Error', message: firstError || 'Please fix form errors.' });
             return;
         }
 
@@ -105,20 +146,17 @@ const ResetPassword = ({ navigation }) => {
                 newPassword,
             });
 
-            Toast.show({
-                topOffset: 60,
+            showAlert({
                 type: 'success',
-                text1: 'Password reset successful',
-                text2: 'You can now login with your new password.',
+                title: 'Password Reset Successful',
+                message: 'You can now login with your new password.',
+                navigateToLogin: true,
             });
-
-            navigation.navigate('Login');
         } catch (error) {
-            Toast.show({
-                topOffset: 60,
+            showAlert({
                 type: 'error',
-                text1: 'Reset failed',
-                text2: error.response?.data?.message || 'Please try again',
+                title: 'Reset Failed',
+                message: error.response?.data?.message || 'Please try again.',
             });
         } finally {
             setLoadingReset(false);
@@ -127,17 +165,38 @@ const ResetPassword = ({ navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.lg }]}> 
+            <SweetAlert
+                visible={alertConfig.visible}
+                type={alertConfig.type}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                confirmText="OK"
+                onConfirm={closeAlert}
+                onCancel={closeAlert}
+            />
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: ws(12), padding: spacing.md }]}> 
                 <Text style={{ color: colors.primary, fontSize: fs(20), fontWeight: '700', marginBottom: spacing.sm }}>
                     Reset Password
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: fs(13), marginBottom: spacing.md }}>
-                    Enter your Gmail account, request a reset code, then set your new password.
+                    Step 1: Request a reset code. Step 2: Enter the code and set your new password.
                 </Text>
+
+                <View style={[styles.stepRow, { marginBottom: spacing.md }]}> 
+                    <View style={[styles.stepBadge, { backgroundColor: step === 'request' ? colors.primary : colors.surfaceLight }]}> 
+                        <Text style={{ color: step === 'request' ? colors.textOnPrimary : colors.textSecondary, fontWeight: '700', fontSize: fs(12) }}>1</Text>
+                    </View>
+                    <Text style={{ color: step === 'request' ? colors.text : colors.textSecondary, fontSize: fs(12), marginRight: 10 }}>Request Code</Text>
+                    <View style={[styles.stepDivider, { backgroundColor: colors.border }]} />
+                    <View style={[styles.stepBadge, { backgroundColor: step === 'reset' ? colors.primary : colors.surfaceLight }]}> 
+                        <Text style={{ color: step === 'reset' ? colors.textOnPrimary : colors.textSecondary, fontWeight: '700', fontSize: fs(12) }}>2</Text>
+                    </View>
+                    <Text style={{ color: step === 'reset' ? colors.text : colors.textSecondary, fontSize: fs(12) }}>Reset Password</Text>
+                </View>
 
                 <TextInput
                     mode="outlined"
-                    label="Gmail"
+                    label="Email"
                     value={email}
                     onChangeText={(text) => { setEmail(text); clearFieldError('email'); }}
                     autoCapitalize="none"
@@ -155,58 +214,62 @@ const ResetPassword = ({ navigation }) => {
                     disabled={loadingSend || resendCooldown > 0}
                 >
                     <Text style={{ color: colors.textOnPrimary, fontWeight: '700' }}>
-                        {loadingSend ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Send Reset Code'}
+                        {loadingSend ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : step === 'request' ? 'Send Reset Code' : 'Resend Code'}
                     </Text>
                 </TouchableOpacity>
 
-                <TextInput
-                    mode="outlined"
-                    label="Reset Code"
-                    value={code}
-                    onChangeText={(text) => { setCode(text); clearFieldError('resetCode'); }}
-                    keyboardType="number-pad"
-                    style={[styles.input, { backgroundColor: colors.inputBg }]}
-                    outlineColor={colors.border}
-                    activeOutlineColor={colors.primary}
-                    textColor={colors.text}
-                />
-                {fieldErrors.resetCode ? <Error message={fieldErrors.resetCode} /> : null}
+                {step === 'reset' ? (
+                    <>
+                        <TextInput
+                            mode="outlined"
+                            label="Reset Code"
+                            value={code}
+                            onChangeText={(text) => { setCode(text); clearFieldError('resetCode'); }}
+                            keyboardType="number-pad"
+                            style={[styles.input, { backgroundColor: colors.inputBg }]}
+                            outlineColor={colors.border}
+                            activeOutlineColor={colors.primary}
+                            textColor={colors.text}
+                        />
+                        {fieldErrors.resetCode ? <Error message={fieldErrors.resetCode} /> : null}
 
-                <TextInput
-                    mode="outlined"
-                    label="New Password"
-                    value={newPassword}
-                    onChangeText={(text) => { setNewPassword(text); clearFieldError('newPassword'); }}
-                    secureTextEntry
-                    style={[styles.input, { backgroundColor: colors.inputBg }]}
-                    outlineColor={colors.border}
-                    activeOutlineColor={colors.primary}
-                    textColor={colors.text}
-                />
-                {fieldErrors.newPassword ? <Error message={fieldErrors.newPassword} /> : null}
+                        <TextInput
+                            mode="outlined"
+                            label="New Password"
+                            value={newPassword}
+                            onChangeText={(text) => { setNewPassword(text); clearFieldError('newPassword'); }}
+                            secureTextEntry
+                            style={[styles.input, { backgroundColor: colors.inputBg }]}
+                            outlineColor={colors.border}
+                            activeOutlineColor={colors.primary}
+                            textColor={colors.text}
+                        />
+                        {fieldErrors.newPassword ? <Error message={fieldErrors.newPassword} /> : null}
 
-                <TextInput
-                    mode="outlined"
-                    label="Confirm New Password"
-                    value={confirmPassword}
-                    onChangeText={(text) => { setConfirmPassword(text); clearFieldError('confirmPassword'); }}
-                    secureTextEntry
-                    style={[styles.input, { backgroundColor: colors.inputBg }]}
-                    outlineColor={colors.border}
-                    activeOutlineColor={colors.primary}
-                    textColor={colors.text}
-                />
-                {fieldErrors.confirmPassword ? <Error message={fieldErrors.confirmPassword} /> : null}
+                        <TextInput
+                            mode="outlined"
+                            label="Confirm New Password"
+                            value={confirmPassword}
+                            onChangeText={(text) => { setConfirmPassword(text); clearFieldError('confirmPassword'); }}
+                            secureTextEntry
+                            style={[styles.input, { backgroundColor: colors.inputBg }]}
+                            outlineColor={colors.border}
+                            activeOutlineColor={colors.primary}
+                            textColor={colors.text}
+                        />
+                        {fieldErrors.confirmPassword ? <Error message={fieldErrors.confirmPassword} /> : null}
 
-                <TouchableOpacity
-                    style={[styles.btn, { backgroundColor: colors.primary, marginTop: spacing.sm }]}
-                    onPress={resetPassword}
-                    disabled={loadingReset}
-                >
-                    <Text style={{ color: colors.textOnPrimary, fontWeight: '700' }}>
-                        {loadingReset ? 'Resetting...' : 'Reset Password'}
-                    </Text>
-                </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.btn, { backgroundColor: colors.primary, marginTop: spacing.sm }]}
+                            onPress={resetPassword}
+                            disabled={loadingReset}
+                        >
+                            <Text style={{ color: colors.textOnPrimary, fontWeight: '700' }}>
+                                {loadingReset ? 'Resetting...' : 'Reset Password'}
+                            </Text>
+                        </TouchableOpacity>
+                    </>
+                ) : null}
             </View>
         </View>
     );
@@ -228,6 +291,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 10,
+    },
+    stepRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    stepBadge: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 6,
+    },
+    stepDivider: {
+        height: 1,
+        flex: 1,
+        marginHorizontal: 8,
     },
 });
 

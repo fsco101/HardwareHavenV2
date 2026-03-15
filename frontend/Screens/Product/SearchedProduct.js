@@ -10,6 +10,11 @@ const SearchedProduct = ({ productsFiltered }) => {
     const navigation = useNavigation();
     const colors = useTheme();
     const { width, fs, spacing, ms } = useResponsive();
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
     return (
         <View style={{ width: width, flex: 1, backgroundColor: colors.background }}>
             {productsFiltered.length > 0 ? (
@@ -22,8 +27,7 @@ const SearchedProduct = ({ productsFiltered }) => {
                         >
                             <Avatar.Image size={ms(40, 0.3)}
                                 source={{
-                                    uri: item.image ?
-                                        item.image : 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png'
+                                    uri: cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '') || fallbackImage
                                 }} />
                             <View style={{ marginLeft: spacing.sm + 4, flex: 1 }}>
                                 <Text variant="labelLarge" style={{ color: colors.text, fontSize: fs(14) }}>{item.name}</Text>

@@ -1,44 +1,47 @@
 // import "core-js/stable/atob";
 import { jwtDecode } from "jwt-decode"
-import Toast from "react-native-toast-message"
+import Toast from '../../Shared/SnackbarService';
 import baseURL from "../../config/api"
 import { saveToken, removeToken } from "../../assets/common/tokenStorage"
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
 
-export const loginUser = (user, dispatch) => {
-    
-    fetch(`${baseURL}users/login`, {
-        method: "POST",
-        body: JSON.stringify(user),
-        headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-        },
-    })
-    .then((res) => res.json())
-    .then(async (data) => {
-        if (data) {
-            // console.log(data)
-            const token = data.token;
-            await saveToken(token)
-            const decoded = jwtDecode(token)
-            console.log("token",token)
-            dispatch(setCurrentUser(decoded, user))
-        } else {
-           logoutUser(dispatch)
-        }
-    })
-    .catch((err) => {
-        Toast.show({
-            topOffset: 60,
-            type: "error",
-            text1: "Please provide correct credentials",
-            text2: ""
+export const loginUser = async (user, dispatch) => {
+    try {
+        const res = await fetch(`${baseURL}users/login`, {
+            method: "POST",
+            body: JSON.stringify(user),
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+            },
         });
-        console.log(err)
-        logoutUser(dispatch)
-    });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data?.token) {
+            logoutUser(dispatch);
+            return {
+                success: false,
+                message: data?.message || "Please provide correct credentials",
+                code: data?.code,
+                deactivation: data?.deactivation,
+            };
+        }
+
+        const token = data.token;
+        await saveToken(token);
+        const decoded = jwtDecode(token);
+        dispatch(setCurrentUser(decoded, user));
+
+        return { success: true };
+    } catch (err) {
+        logoutUser(dispatch);
+        return {
+            success: false,
+            message: "Network error. Please try again.",
+        };
+    }
 };
 
 export const getUserProfile = (id) => {
@@ -59,36 +62,42 @@ export const logoutUser = (dispatch) => {
     dispatch(setCurrentUser({}))
 }
 
-export const firebaseLoginUser = (firebaseData, dispatch) => {
-    fetch(`${baseURL}users/firebase-login`, {
-        method: "POST",
-        body: JSON.stringify(firebaseData),
-        headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-        },
-    })
-    .then((res) => res.json())
-    .then(async (data) => {
-        if (data && data.token) {
-            const token = data.token;
-            await saveToken(token);
-            const decoded = jwtDecode(token);
-            dispatch(setCurrentUser(decoded, { email: firebaseData.email }));
-        } else {
-            logoutUser(dispatch);
-        }
-    })
-    .catch((err) => {
-        Toast.show({
-            topOffset: 60,
-            type: "error",
-            text1: "Firebase login failed",
-            text2: "Please try again",
+export const firebaseLoginUser = async (firebaseData, dispatch) => {
+    try {
+        const res = await fetch(`${baseURL}users/firebase-login`, {
+            method: "POST",
+            body: JSON.stringify(firebaseData),
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+            },
         });
-        console.log(err);
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data?.token) {
+            logoutUser(dispatch);
+            return {
+                success: false,
+                message: data?.message || "Firebase login failed",
+                code: data?.code,
+                deactivation: data?.deactivation,
+            };
+        }
+
+        const token = data.token;
+        await saveToken(token);
+        const decoded = jwtDecode(token);
+        dispatch(setCurrentUser(decoded, { email: firebaseData?.email || '' }));
+
+        return { success: true };
+    } catch (err) {
         logoutUser(dispatch);
-    });
+        return {
+            success: false,
+            message: "Firebase login failed",
+        };
+    }
 };
 
 export const setCurrentUser = (decoded, user) => {

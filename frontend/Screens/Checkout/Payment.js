@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useResponsive } from '../../assets/common/responsive';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 
 const methods = [
   { name: 'Cash on Delivery', value: 'COD', icon: 'cash-outline', description: 'Pay when you receive your order' },

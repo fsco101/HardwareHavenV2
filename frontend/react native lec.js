@@ -2955,7 +2955,7 @@ export default Register;
 register.js axios
 import axios from "axios";
 import baseURL from "../../assets/common/baseUrl";
-import Toast from "react-native-toast-message";
+import Toast from './Shared/SnackbarService';
 
 let user = {
         name: name,
@@ -2990,11 +2990,11 @@ let user = {
         });
 
 app.js
-import Toast from "react-native-toast-message";
+import Toast from './Shared/SnackbarService';
    <NavigationContainer>
           <Header />
           <Main />
-          <Toast  />
+          <SnackbarHost />
         </NavigationContainer>
 
 
@@ -3010,7 +3010,7 @@ productcard toast
 }} 
 
 singleproduct toast
-import Toast from 'react-native-toast-message';
+import Toast from './Shared/SnackbarService';
 import * as actions from '../../Redux/Actions/cartActions';
 import { useSelector, useDispatch } from 'react-redux'
 const dispatch = useDispatch()
@@ -3033,7 +3033,7 @@ context/actions context/reducers context/store
 context/actions/Auth.actions.js
 import jwt_decode from "jwt-decode"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import Toast from "react-native-toast-message"
+import Toast from './Shared/SnackbarService'
 import baseURL from "../../assets/common/baseUrl"
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
@@ -4077,7 +4077,7 @@ import Input from "../../Shared/Form/Input"
 import EasyButton from "../../Shared/StyledComponents/EasyButton"
 
 import Icon from "react-native-vector-icons/FontAwesome"
-import Toast from "react-native-toast-message"
+import Toast from './Shared/SnackbarService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import baseURL from "../../config/api" 
 import axios from "axios"
@@ -4440,7 +4440,7 @@ useEffect(() => {
 confirm order
 cart/checkout/confirm
 
-import Toast from "react-native-toast-message";
+import Toast from './Shared/SnackbarService';
 import axios from "axios";
 import baseURL from "../../../assets/common/baseUrl";
 import { useNavigation } from '@react-navigation/native';
@@ -4724,7 +4724,7 @@ import { Picker } from "native-base";
 import Icon from "react-native-vector-icons/FontAwesome";
 import TrafficLight from "./StyledComponents/TrafficLight";
 import EasyButton from "./StyledComponents/EasyButton";
-import Toast from "react-native-toast-message";
+import Toast from './Shared/SnackbarService';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import axios from "axios";
@@ -5192,3 +5192,4 @@ const styles = StyleSheet.create({
 })
 
 export default Categories;
+

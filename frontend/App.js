@@ -3,12 +3,14 @@ import { StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native'
 import { useEffect, useContext, useCallback } from 'react';
 import Constants from 'expo-constants';
+import axios from 'axios';
 
 import Header from './Shared/Header';
 import { Provider as PaperProvider, MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
 import { Provider, useDispatch } from 'react-redux';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import store from './Redux/store';
-import Toast from 'react-native-toast-message';
+import { SnackbarHost } from './Shared/SnackbarService';
 import Auth from './Context/Store/Auth';
 import DrawerNavigator from './Navigators/DrawerNavigator';
 import { ThemeProvider, useTheme, useThemeMode } from './Theme/theme';
@@ -17,6 +19,7 @@ import { PromotionProvider } from './Context/Store/PromotionContext';
 import { initializeCartFromSQLite } from './Redux/Actions/cartActions';
 import { navigationRef } from './Navigators/navigationRef';
 import AuthGlobal from './Context/Store/AuthGlobal';
+import baseURL from './config/api';
 
 const isExpoGoAndroid = () => {
   if (Platform.OS !== 'android') {
@@ -72,7 +75,6 @@ const PROTECTED_ROUTES = new Set([
   'My Orders',
   'Order Detail',
   'User Profile',
-  'Reset Password',
   'Dashboard',
   'Products',
   'ProductForm',
@@ -144,16 +146,40 @@ export default function App() {
           }),
         });
 
-        responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+        responseListener = Notifications.addNotificationResponseReceivedListener(async (response) => {
           const data = response?.notification?.request?.content?.data || {};
           const type = data?.type;
           const orderId = data?.orderId;
+          const productId = data?.productId;
 
           if (navigationRef.isReady() && type?.startsWith('order_') && orderId) {
             navigationRef.navigate('Orders', {
               screen: 'Order Detail',
               params: { orderId },
             });
+            return;
+          }
+
+          if (navigationRef.isReady() && type === 'promotion') {
+            if (!productId) {
+              console.log('Promotion notification missing productId');
+              return;
+            }
+
+            try {
+              const res = await axios.get(`${baseURL}products/${productId}`);
+              if (!res?.data) {
+                console.log('Promotion product not found');
+                return;
+              }
+
+              navigationRef.navigate('Home', {
+                screen: 'Product Detail',
+                params: { item: res.data },
+              });
+            } catch (error) {
+              console.log('Promotion deep-link error:', error?.message || error);
+            }
           }
         });
       } catch (error) {
@@ -172,18 +198,20 @@ export default function App() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <Auth>
-        <Provider store={store}>
-          <NotificationProvider>
-            <PromotionProvider>
-              <NavigationRoot />
-            </PromotionProvider>
-          </NotificationProvider>
-          <Toast />
-        </Provider>
-      </Auth>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <Auth>
+          <Provider store={store}>
+            <NotificationProvider>
+              <PromotionProvider>
+                <NavigationRoot />
+              </PromotionProvider>
+            </NotificationProvider>
+            <SnackbarHost />
+          </Provider>
+        </Auth>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

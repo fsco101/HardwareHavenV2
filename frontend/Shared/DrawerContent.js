@@ -139,13 +139,6 @@ const DrawerContent = ({ navigation }) => {
               theme={{ colors: { onSurfaceVariant: colors.text, onSecondaryContainer: colors.primary } }}
             />
             <Drawer.Item
-              label="Reset Password"
-              active={active === 'Reset Password'}
-              onPress={() => handleRoute('Reset Password', 'User', { screen: 'Reset Password' })}
-              icon="lock-reset"
-              theme={{ colors: { onSurfaceVariant: colors.text, onSecondaryContainer: colors.primary } }}
-            />
-            <Drawer.Item
               label="Notifications"
               active={active === 'Notifications'}
               icon="bell"
@@ -215,6 +208,20 @@ const DrawerContent = ({ navigation }) => {
             active={active === 'Promotions'}
             onPress={() => handleRoute('Promotions', 'Admin', { screen: 'Promotions' })}
             icon="tag-heart-outline"
+            theme={{ colors: { onSurfaceVariant: colors.text, onSecondaryContainer: colors.primary } }}
+          />
+          <Drawer.Item
+            label="User Management"
+            active={active === 'User Management'}
+            onPress={() => handleRoute('User Management', 'Admin', { screen: 'User Management' })}
+            icon="account-cog-outline"
+            theme={{ colors: { onSurfaceVariant: colors.text, onSecondaryContainer: colors.primary } }}
+          />
+          <Drawer.Item
+            label="Review Management"
+            active={active === 'Review Management'}
+            onPress={() => handleRoute('Review Management', 'Admin', { screen: 'Review Management' })}
+            icon="message-draw"
             theme={{ colors: { onSurfaceVariant: colors.text, onSecondaryContainer: colors.primary } }}
           />
         </Drawer.Section>

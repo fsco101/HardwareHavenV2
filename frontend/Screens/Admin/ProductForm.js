@@ -16,7 +16,7 @@ import Input from "../../Shared/Input"
 import EasyButton from "../../Shared/StyledComponents/EasyButton"
 import Error from "../../Shared/Error"
 
-import Toast from "react-native-toast-message"
+import Toast from '../../Shared/SnackbarService';
 import baseURL from "../../config/api"
 import axios from "axios"
 import * as ImagePicker from "expo-image-picker"
@@ -52,6 +52,11 @@ const ProductForm = (props) => {
     const [item, setItem] = useState(null);
     const [uploading, setUploading] = useState(false);
     const dispatch = useDispatch();
+    const hasMainImage = Boolean(mainImage && String(mainImage).trim());
+    const validGalleryImages = galleryImages.filter((uri) => Boolean(uri && String(uri).trim()));
+    const resolvedMainImage = hasMainImage
+        ? String(mainImage).trim()
+        : (validGalleryImages[0] ? String(validGalleryImages[0]).trim() : '');
 
     let navigation = useNavigation()
 
@@ -69,8 +74,9 @@ const ProductForm = (props) => {
             setName(incomingItem?.name || '');
             setPrice(incomingItem?.price != null ? incomingItem.price.toString() : '');
             setDescription(incomingItem?.description || '');
-            setMainImage(incomingItem?.image || '');
-            setImage(incomingItem?.image || '');
+            const fallbackImage = incomingItem?.image || (Array.isArray(incomingItem?.images) && incomingItem.images.length > 0 ? incomingItem.images[0] : '');
+            setMainImage(fallbackImage || '');
+            setImage(fallbackImage || '');
             setCategory(resolvedCategory);
             setPickerValue(resolvedCategory);
             setCountInStock(incomingItem?.countInStock != null ? incomingItem.countInStock.toString() : '');
@@ -150,7 +156,10 @@ const ProductForm = (props) => {
     };
 
     const removeGalleryImage = (index) => {
-        setGalleryImages(prev => prev.filter((_, i) => i !== index));
+        setGalleryImages(prev => {
+            const cleaned = prev.filter((uri) => Boolean(uri && String(uri).trim()));
+            return cleaned.filter((_, i) => i !== index);
+        });
     };
 
     const clearFieldError = (field) => {
@@ -209,7 +218,8 @@ const ProductForm = (props) => {
             }
 
             if (item !== null) {
-                const result = await dispatch(updateProduct(item.id, productData, token));
+                const targetProductId = item.id || item._id;
+                const result = await dispatch(updateProduct(targetProductId, productData, token));
                 if (result.success) {
                     Toast.show({ topOffset: 60, type: "success", text1: "Product successfully updated" });
                     setTimeout(() => { navigation.navigate("Products"); }, 500);
@@ -226,8 +236,9 @@ const ProductForm = (props) => {
                 }
             }
         } catch (error) {
+            const message = error?.message || 'Please try again';
             console.log(error);
-            Toast.show({ topOffset: 60, type: "error", text1: "Something went wrong", text2: "Please try again" });
+            Toast.show({ topOffset: 60, type: "error", text1: "Image upload failed", text2: message });
         } finally {
             setUploading(false);
         }
@@ -236,7 +247,13 @@ const ProductForm = (props) => {
     return (
         <FormContainer title={item !== null ? "Edit Product" : "Add Product"}>
             <View style={[styles.imageContainer, { borderColor: colors.border, width: 140, height: 140, borderRadius: 70 }]}>
-                <Image style={styles.image} source={{ uri: mainImage }} />
+                {resolvedMainImage ? (
+                    <Image style={styles.image} source={{ uri: resolvedMainImage }} />
+                ) : (
+                    <View style={[styles.imagePlaceholder, { backgroundColor: colors.surfaceLight }]}> 
+                        <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
+                    </View>
+                )}
                 <TouchableOpacity
                     onPress={pickImage}
                     style={[styles.imagePicker, { backgroundColor: colors.primary, right: 5, bottom: 5, padding: 6 }]}>
@@ -252,7 +269,7 @@ const ProductForm = (props) => {
             <View style={[styles.sectionHeader, { marginTop: 10 }]}>
                 <Ionicons name="images-outline" size={18} color={colors.primary} />
                 <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: fs(13), marginLeft: 4 }}>
-                    Gallery Images ({galleryImages.length})
+                    Gallery Images ({validGalleryImages.length})
                 </Text>
             </View>
             <View style={styles.galleryRow}>
@@ -269,7 +286,7 @@ const ProductForm = (props) => {
                     <Text style={{ color: colors.textSecondary, fontSize: 9, marginTop: 1 }}>Camera</Text>
                 </TouchableOpacity>
                 <FlatList
-                    data={galleryImages}
+                    data={validGalleryImages}
                     horizontal
                     keyExtractor={(item, index) => index.toString()}
                     renderItem={({ item: uri, index }) => (
@@ -374,6 +391,13 @@ const styles = StyleSheet.create({
         width: "100%",
         height: "100%",
         borderRadius: 100
+    },
+    imagePlaceholder: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     imagePicker: {
         position: "absolute",

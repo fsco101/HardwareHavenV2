@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
-import Toast from 'react-native-toast-message';
+import Toast from '../../Shared/SnackbarService';
 
 import { useTheme } from '../../Theme/theme';
 import { useResponsive } from '../../assets/common/responsive';
@@ -35,6 +35,12 @@ const ProductCard = (props) => {
     const cHeight = cWidth * 1.65;
     const imgHeight = cWidth - ws(42);
     const descriptionText = String(description || richDescription || '').trim();
+    const cleanUri = (value) => {
+        const uri = String(value || '').trim();
+        return uri ? uri : '';
+    };
+    const imageUri = cleanUri(image) || cleanUri(Array.isArray(props.images) ? props.images[0] : '');
+    const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
 
     const increaseQty = () => {
         const stock = Number(countInStock || 0);
@@ -119,8 +125,7 @@ const ProductCard = (props) => {
                     }]}
                     resizeMode="contain"
                     source={{
-                        uri: image ?
-                            image : 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png'
+                        uri: imageUri || fallbackImage
                     }}
                 />
                 <Text style={[styles.title, { color: colors.text, fontSize: fs(14) }]}> 
