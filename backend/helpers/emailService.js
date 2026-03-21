@@ -1,19 +1,29 @@
 const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', 'config', '.env') });
+const { toOrderNumber } = require('./orderNumber');
+
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPassword = process.env.SMTP_PASSWORD || process.env.EMAIL_PASS;
+const smtpFromEmail = process.env.SMTP_FROM_EMAIL || smtpUser;
+const smtpFromName = process.env.SMTP_FROM_NAME || 'HardwareHaven';
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: smtpUser,
+        pass: smtpPassword,
     },
 });
 
 async function sendEmail({ to, subject, html, attachments = [] }) {
     try {
         const info = await transporter.sendMail({
-            from: `"HardwareHaven" <${process.env.EMAIL_USER}>`,
+            from: `"${smtpFromName}" <${smtpFromEmail}>`,
             to,
             subject,
             html,
@@ -29,15 +39,16 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
 
 function orderStatusUpdateEmail(order, user, status) {
     const statusColor = status === 'Delivered' ? '#2ecc71' : status === 'Processing' ? '#f39c12' : '#ff6600';
+    const orderNumber = toOrderNumber(order);
     return {
         to: user.email,
-        subject: `Order #${order._id} - Status Updated to ${status}`,
+        subject: `Order #${orderNumber} - Status Updated to ${status}`,
         html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
                 <h1 style="color:#ff6600;text-align:center;">HardwareHaven</h1>
                 <h2>Order Status Update</h2>
                 <p>Hi ${user.name},</p>
-                <p>Your order <strong style="color:#ff6600;">#${order._id}</strong> has been updated to:</p>
+                <p>Your order <strong style="color:#ff6600;">#${orderNumber}</strong> has been updated to:</p>
                 <div style="background:#16213e;padding:15px;border-radius:8px;text-align:center;margin:15px 0;">
                     <span style="font-size:24px;font-weight:bold;color:${statusColor};">${status}</span>
                 </div>
@@ -49,14 +60,15 @@ function orderStatusUpdateEmail(order, user, status) {
 }
 
 function orderCancelledAdminEmail(order, user, reason) {
+    const orderNumber = toOrderNumber(order);
     return {
-        to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-        subject: `Order #${order._id} Cancelled by ${user.name}`,
+        to: process.env.ADMIN_EMAIL || smtpFromEmail || process.env.EMAIL_USER,
+        subject: `Order #${orderNumber} Cancelled by ${user.name}`,
         html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
                 <h1 style="color:#ff6600;text-align:center;">HardwareHaven Admin</h1>
                 <h2 style="color:#e74c3c;">Order Cancelled</h2>
-                <p>Order <strong style="color:#ff6600;">#${order._id}</strong> has been cancelled by <strong>${user.name}</strong> (${user.email}).</p>
+                <p>Order <strong style="color:#ff6600;">#${orderNumber}</strong> has been cancelled by <strong>${user.name}</strong> (${user.email}).</p>
                 <div style="background:#16213e;padding:15px;border-radius:8px;margin:15px 0;">
                     <p><strong>Reason:</strong></p>
                     <p style="color:#f39c12;">${reason}</p>
@@ -68,15 +80,16 @@ function orderCancelledAdminEmail(order, user, reason) {
 }
 
 function orderCancelledUserEmail(order, user, reason) {
+    const orderNumber = toOrderNumber(order);
     return {
         to: user.email,
-        subject: `Order #${order._id} - Cancellation Confirmed`,
+        subject: `Order #${orderNumber} - Cancellation Confirmed`,
         html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
                 <h1 style="color:#ff6600;text-align:center;">HardwareHaven</h1>
                 <h2>Order Cancelled</h2>
                 <p>Hi ${user.name},</p>
-                <p>Your order <strong style="color:#ff6600;">#${order._id}</strong> has been cancelled.</p>
+                <p>Your order <strong style="color:#ff6600;">#${orderNumber}</strong> has been cancelled.</p>
                 <div style="background:#16213e;padding:15px;border-radius:8px;margin:15px 0;">
                     <p><strong>Reason:</strong> ${reason}</p>
                 </div>
@@ -88,15 +101,16 @@ function orderCancelledUserEmail(order, user, reason) {
 }
 
 function orderPlacedEmail(order, user) {
+    const orderNumber = toOrderNumber(order);
     return {
         to: user.email,
-        subject: `Order #${order._id} - Placed Successfully`,
+        subject: `Order #${orderNumber} - Placed Successfully`,
         html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
                 <h1 style="color:#ff6600;text-align:center;">HardwareHaven</h1>
                 <h2>Order Confirmed!</h2>
                 <p>Hi ${user.name},</p>
-                <p>Your order <strong style="color:#ff6600;">#${order._id}</strong> has been placed successfully.</p>
+                <p>Your order <strong style="color:#ff6600;">#${orderNumber}</strong> has been placed successfully.</p>
                 <div style="background:#16213e;padding:15px;border-radius:8px;margin:15px 0;">
                     <p><strong>Payment Method:</strong> ${order.paymentMethod || 'N/A'}</p>
                     <p><strong>Total:</strong> <span style="color:#ffd60a;font-size:18px;">&#8369;${(order.totalPrice || 0).toFixed(2)}</span></p>
@@ -109,14 +123,15 @@ function orderPlacedEmail(order, user) {
 }
 
 function orderDeliveredConfirmationAdminEmail(order, buyer, admin) {
+    const orderNumber = toOrderNumber(order);
     return {
-        to: admin?.email || process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-        subject: `Order #${order._id} Delivered Confirmation`,
+        to: admin?.email || process.env.ADMIN_EMAIL || smtpFromEmail || process.env.EMAIL_USER,
+        subject: `Order #${orderNumber} Delivered Confirmation`,
         html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
                 <h1 style="color:#ff6600;text-align:center;">HardwareHaven Admin</h1>
                 <h2 style="color:#2ecc71;">Buyer Confirmed Delivery</h2>
-                <p>Order <strong style="color:#ff6600;">#${order._id}</strong> has been marked as <strong>Delivered</strong> by the buyer.</p>
+                <p>Order <strong style="color:#ff6600;">#${orderNumber}</strong> has been marked as <strong>Delivered</strong> by the buyer.</p>
                 <div style="background:#16213e;padding:15px;border-radius:8px;margin:15px 0;">
                     <p><strong>Buyer:</strong> ${buyer?.name || 'N/A'} (${buyer?.email || 'N/A'})</p>
                     <p><strong>Delivered At:</strong> ${order.deliveredAt ? new Date(order.deliveredAt).toLocaleString() : new Date().toLocaleString()}</p>
@@ -149,6 +164,27 @@ function passwordResetCodeEmail(user, code) {
     };
 }
 
+function accountDeactivatedEmail(user, reason) {
+    const safeReason = String(reason || 'No reason provided by admin.').trim();
+    return {
+        to: user.email,
+        subject: 'Your HardwareHaven account was deactivated',
+        html: `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a2e;color:#e8e8e8;padding:20px;border-radius:10px;">
+                <h1 style="color:#ff6600;text-align:center;">HardwareHaven</h1>
+                <h2 style="color:#e74c3c;">Account Deactivated</h2>
+                <p>Hi ${user?.name || 'there'},</p>
+                <p>Your account has been deactivated by an administrator.</p>
+                <div style="background:#16213e;padding:15px;border-radius:8px;margin:15px 0;">
+                    <p><strong>Reason:</strong> ${safeReason}</p>
+                </div>
+                <p>If you believe this is a mistake, please contact support or admin.</p>
+                <p style="color:#a0a0b0;font-size:12px;">HardwareHaven - Account Notification</p>
+            </div>
+        `,
+    };
+}
+
 module.exports = {
     sendEmail,
     orderStatusUpdateEmail,
@@ -157,4 +193,5 @@ module.exports = {
     orderPlacedEmail,
     orderDeliveredConfirmationAdminEmail,
     passwordResetCodeEmail,
+    accountDeactivatedEmail,
 };

@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const { isExpoPushToken } = require('../helpers/pushNotifications');
 const crypto = require('crypto');
-const { sendEmail, passwordResetCodeEmail } = require('../helpers/emailService');
+const { sendEmail, passwordResetCodeEmail, accountDeactivatedEmail } = require('../helpers/emailService');
 const { adminOnly } = require('../helpers/jwt');
 const { verifyFirebaseIdToken } = require('../helpers/firebaseAdmin');
 
@@ -151,6 +151,12 @@ router.put('/admin/:id/status', adminOnly, async (req, res) => {
             user.deactivationReason = deactivationReason;
         }
         await user.save();
+
+        if (isActive === false && user.email) {
+            sendEmail(accountDeactivatedEmail(user, deactivationReason)).catch((err) => {
+                console.error('Deactivation email error:', err.message || err);
+            });
+        }
 
         const safeUser = await User.findById(user._id).select('-passwordHash -resetPasswordCodeHash -resetPasswordCodeExpires');
         return res.json({ success: true, message: `User ${isActive ? 'activated' : 'deactivated'}.`, user: safeUser });

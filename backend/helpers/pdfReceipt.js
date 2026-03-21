@@ -1,4 +1,9 @@
 const PDFDocument = require('pdfkit');
+const { toOrderNumber } = require('./orderNumber');
+
+function money(value) {
+    return `P${Number(value || 0).toFixed(2)}`;
+}
 
 function generateReceiptPDF(order, user) {
     return new Promise((resolve, reject) => {
@@ -21,12 +26,15 @@ function generateReceiptPDF(order, user) {
             doc.fontSize(18).fillColor('#333333').text('Order Receipt', { align: 'center' });
             doc.moveDown();
 
+            const orderNumber = toOrderNumber(order);
+
             // Order info
             doc.fontSize(11).fillColor('#333333');
-            doc.text(`Order ID: ${order._id}`);
+            doc.text(`Order Number: ${orderNumber}`);
             doc.text(`Date: ${new Date(order.dateOrdered).toLocaleDateString()}`);
             doc.text(`Status: ${order.status}`);
             doc.text(`Payment: ${order.paymentMethod || 'N/A'}`);
+            doc.text(`Payment Status: ${order.paymentStatus || 'Pending'}`);
             doc.moveDown();
 
             // Customer info
@@ -55,10 +63,10 @@ function generateReceiptPDF(order, user) {
 
             const tableTop = doc.y;
             doc.fontSize(10).fillColor('#666666');
-            doc.text('Item', 50, tableTop, { width: 250 });
-            doc.text('Qty', 310, tableTop, { width: 60, align: 'center' });
-            doc.text('Price', 380, tableTop, { width: 80, align: 'right' });
-            doc.text('Total', 470, tableTop, { width: 75, align: 'right' });
+            doc.text('Item Details', 50, tableTop, { width: 290 });
+            doc.text('Qty', 345, tableTop, { width: 40, align: 'center' });
+            doc.text('Unit', 390, tableTop, { width: 70, align: 'right' });
+            doc.text('Total', 465, tableTop, { width: 80, align: 'right' });
             doc.moveTo(50, tableTop + 15).lineTo(545, tableTop + 15).stroke('#cccccc');
 
             let y = tableTop + 25;
@@ -68,18 +76,24 @@ function generateReceiptPDF(order, user) {
                 for (const item of order.orderItems) {
                     const product = item.product || {};
                     const name = product.name || 'Product';
+                    const brand = product.brand || 'N/A';
+                    const category = product.category?.name || 'N/A';
                     const qty = item.quantity || 1;
                     const price = product.price || 0;
                     const total = qty * price;
                     subtotal += total;
 
                     doc.fontSize(10).fillColor('#333333');
-                    doc.text(name, 50, y, { width: 250 });
-                    doc.text(qty.toString(), 310, y, { width: 60, align: 'center' });
-                    doc.text(`P${price.toFixed(2)}`, 380, y, { width: 80, align: 'right' });
-                    doc.text(`P${total.toFixed(2)}`, 470, y, { width: 75, align: 'right' });
+                    doc.text(name, 50, y, { width: 290 });
+                    doc.text(qty.toString(), 345, y, { width: 40, align: 'center' });
+                    doc.text(money(price), 390, y, { width: 70, align: 'right' });
+                    doc.text(money(total), 465, y, { width: 80, align: 'right' });
 
-                    y += 20;
+                    y += 14;
+                    doc.fontSize(9).fillColor('#666666');
+                    doc.text(`Brand: ${brand} | Category: ${category}`, 50, y, { width: 290 });
+                    y += 14;
+
                     if (y > 700) {
                         doc.addPage();
                         y = 50;
@@ -89,10 +103,18 @@ function generateReceiptPDF(order, user) {
 
             doc.moveTo(50, y + 5).lineTo(545, y + 5).stroke('#cccccc');
             y += 15;
-            doc.fontSize(12).fillColor('#333333').text('Total:', 380, y, { width: 80, align: 'right' });
+            doc.fontSize(11).fillColor('#333333').text('Subtotal:', 380, y, { width: 80, align: 'right' });
+            doc.fontSize(11).fillColor('#333333').text(money(subtotal), 465, y, { width: 80, align: 'right' });
+
+            y += 14;
+            doc.fontSize(11).fillColor('#333333').text('Shipping:', 380, y, { width: 80, align: 'right' });
+            doc.fontSize(11).fillColor('#333333').text(money(0), 465, y, { width: 80, align: 'right' });
+
+            y += 16;
+            doc.fontSize(12).fillColor('#333333').text('Grand Total:', 380, y, { width: 80, align: 'right' });
             doc.fontSize(14).fillColor('#ff6600').text(
-                `P${(order.totalPrice || subtotal).toFixed(2)}`,
-                470, y, { width: 75, align: 'right' }
+                money(order.totalPrice || subtotal),
+                465, y, { width: 80, align: 'right' }
             );
 
             // Footer

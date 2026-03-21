@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { toOrderNumber } = require('../helpers/orderNumber');
 
 const orderSchema = mongoose.Schema({
     orderItems: [{
@@ -101,6 +102,10 @@ const orderSchema = mongoose.Schema({
 
 orderSchema.virtual('id').get(function () {
     return this._id.toHexString();
+});
+
+orderSchema.virtual('orderNumber').get(function () {
+    return toOrderNumber(this);
 });
 
 orderSchema.set('toJSON', {

@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const { sendEmail, orderStatusUpdateEmail, orderCancelledAdminEmail, orderCancelledUserEmail, orderPlacedEmail, orderDeliveredConfirmationAdminEmail } = require('../helpers/emailService');
 const { generateReceiptPDF } = require('../helpers/pdfReceipt');
 const { sendExpoPushNotifications } = require('../helpers/pushNotifications');
+const { toOrderNumber } = require('../helpers/orderNumber');
 const router = express.Router();
 
 function getPayMongoAuthHeader(secretKey) {
@@ -193,6 +194,24 @@ function getAuthFromRequest(req) {
     }
 }
 
+async function sendEmailWithReceipt(order, user, emailData, contextLabel = 'Order') {
+    const orderNumber = toOrderNumber(order);
+
+    const pdfBuffer = await generateReceiptPDF(order, user);
+    emailData.attachments = [
+        ...(emailData.attachments || []),
+        {
+            filename: `receipt-${orderNumber}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+        },
+    ];
+
+    return sendEmail(emailData).catch((err) => {
+        console.error(`${contextLabel} email error:`, err);
+    });
+}
+
 router.get(`/`, async (req, res) => {
     const orderList = await Order.find()
         .populate('user', 'name email')
@@ -322,11 +341,13 @@ router.post('/', async (req, res) => {
         if (!order)
             return res.status(400).send('The order cannot be created!');
 
+        const orderNumber = toOrderNumber(order);
+
         // Send notification to user
         await createNotification(req, {
             userId: req.body.user,
             title: 'Order Placed!',
-            message: `Your order #${order._id} has been placed successfully. Total: P${totalPrice.toFixed(2)}`,
+            message: `Your order #${orderNumber} has been placed successfully. Total: P${totalPrice.toFixed(2)}`,
             type: 'order_placed',
             orderId: order._id,
         });
@@ -334,7 +355,14 @@ router.post('/', async (req, res) => {
         // Send email confirmation
         const user = await User.findById(req.body.user);
         if (user) {
-            sendEmail(orderPlacedEmail(order, user)).catch(err => console.error('Order email error:', err));
+            const orderForReceipt = await Order.findById(order._id).populate({
+                path: 'orderItems',
+                populate: { path: 'product', populate: 'category' }
+            });
+
+            if (orderForReceipt) {
+                await sendEmailWithReceipt(orderForReceipt, user, orderPlacedEmail(orderForReceipt, user), 'Order confirmation');
+            }
         }
 
         // If online payment, create PayMongo checkout session
@@ -387,10 +415,11 @@ router.post('/', async (req, res) => {
                                     send_email_receipt: false,
                                     show_description: true,
                                     show_line_items: true,
-                                    description: `HardwareHaven Order #${order._id}`,
+                                    description: `HardwareHaven Order #${orderNumber}`,
                                     reference_number: String(order._id),
                                     metadata: {
                                         orderId: String(order._id),
+                                        orderNumber,
                                     },
                                     line_items: lineItems,
                                     payment_method_types: ['gcash', 'grab_pay'],
@@ -552,9 +581,9 @@ router.put('/:id', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Admin access required' });
         }
 
-        const validStatuses = ['Pending', 'Processing', 'Shipped'];
+        const validStatuses = ['Pending', 'Processing', 'Shipped', 'Cancelled'];
         if (req.body.status && !validStatuses.includes(req.body.status)) {
-            return res.status(400).json({ success: false, message: 'Invalid status. Must be: Pending, Processing, or Shipped' });
+            return res.status(400).json({ success: false, message: 'Invalid status. Must be: Pending, Processing, Shipped, or Cancelled' });
         }
 
         const existingOrder = await Order.findById(req.params.id);
@@ -570,6 +599,10 @@ router.put('/:id', async (req, res) => {
         if (req.body.status === 'Shipped' && !existingOrder.shippedAt) {
             updatePayload.shippedAt = new Date();
         }
+        if (req.body.status === 'Cancelled' && existingOrder.status !== 'Cancelled') {
+            updatePayload.cancelledAt = new Date();
+            updatePayload.cancellationReason = String(req.body.reason || 'Cancelled by admin').trim();
+        }
 
         const order = await Order.findByIdAndUpdate(
             req.params.id,
@@ -583,6 +616,17 @@ router.put('/:id', async (req, res) => {
         if (!order)
             return res.status(400).send('The order cannot be updated!');
 
+        // Restore stock only once when transitioning into Cancelled.
+        if (req.body.status === 'Cancelled' && existingOrder.status !== 'Cancelled') {
+            for (const item of order.orderItems || []) {
+                const productId = item?.product?._id || item?.product;
+                if (!productId) continue;
+                await Product.findByIdAndUpdate(productId, {
+                    $inc: { countInStock: item.quantity || 1 }
+                });
+            }
+        }
+
         // Get user for notification
         const user = await User.findById(order.user);
 
@@ -590,27 +634,19 @@ router.put('/:id', async (req, res) => {
         if (user) {
             await createNotification(req, {
                 userId: user._id,
-                title: 'Order Status Updated',
+                title: req.body.status === 'Cancelled' ? 'Order Cancelled' : 'Order Status Updated',
                 message: req.body.status === 'Shipped'
-                    ? `Your order #${order._id} has been shipped. Please confirm delivery once you receive it.`
-                    : `Your order #${order._id} is now: ${req.body.status}`,
-                type: 'order_status_update',
+                    ? `Your order #${toOrderNumber(order)} has been shipped. Please confirm delivery once you receive it.`
+                    : req.body.status === 'Cancelled'
+                        ? `Your order #${toOrderNumber(order)} was cancelled. Reason: ${order.cancellationReason || 'Cancelled by admin'}`
+                        : `Your order #${toOrderNumber(order)} is now: ${req.body.status}`,
+                type: req.body.status === 'Cancelled' ? 'order_cancelled' : 'order_status_update',
                 orderId: order._id,
             });
 
             // Send email with PDF receipt
             const emailData = orderStatusUpdateEmail(order, user, req.body.status);
-            try {
-                const pdfBuffer = await generateReceiptPDF(order, user);
-                emailData.attachments = [{
-                    filename: `receipt-${order._id}.pdf`,
-                    content: pdfBuffer,
-                    contentType: 'application/pdf',
-                }];
-            } catch (pdfErr) {
-                console.error('PDF generation error:', pdfErr.message);
-            }
-            sendEmail(emailData).catch(err => console.error('Status email error:', err));
+            await sendEmailWithReceipt(order, user, emailData, 'Status update');
         }
 
         res.send(order);
@@ -656,7 +692,7 @@ router.put('/confirm-delivery/:id', async (req, res) => {
             await createNotification(req, {
                 userId: admin._id,
                 title: 'Order Delivered Confirmed',
-                message: `Buyer confirmed delivery for order #${order._id}. This order is now locked.`,
+                message: `Buyer confirmed delivery for order #${toOrderNumber(order)}. This order is now locked.`,
                 type: 'order_delivered_confirmed',
                 orderId: order._id,
             });
@@ -717,7 +753,7 @@ router.put('/cancel/:id', async (req, res) => {
             await createNotification(req, {
                 userId: user._id,
                 title: 'Order Cancelled',
-                message: `Your order #${order._id} has been cancelled. Reason: ${reason}`,
+                message: `Your order #${toOrderNumber(order)} has been cancelled. Reason: ${reason}`,
                 type: 'order_cancelled',
                 orderId: order._id,
             });
@@ -734,7 +770,7 @@ router.put('/cancel/:id', async (req, res) => {
                 await createNotification(req, {
                     userId: admin._id,
                     title: 'Order Cancelled by Customer',
-                    message: `Order #${order._id} cancelled by ${user.name}. Reason: ${reason}`,
+                    message: `Order #${toOrderNumber(order)} cancelled by ${user.name}. Reason: ${reason}`,
                     type: 'order_cancelled',
                     orderId: order._id,
                 });
