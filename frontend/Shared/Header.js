@@ -1,7 +1,7 @@
 import React, { useContext } from "react"
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native"
+import { StyleSheet, View, Text, TouchableOpacity, Image } from "react-native"
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../Theme/theme';
+import { useTheme, useThemeMode } from '../Theme/theme';
 import { useResponsive } from '../assets/common/responsive';
 import NotificationBell from './NotificationBell';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,8 +12,12 @@ import AuthGlobal from '../Context/Store/AuthGlobal';
 const Header = () => {
     const auth = useContext(AuthGlobal);
     const colors = useTheme();
+    const themeMode = useThemeMode();
     const { fs, spacing, ms, ws } = useResponsive();
     const isAuthenticated = auth?.stateUser?.isAuthenticated === true;
+    const headerLogo = themeMode === 'dark'
+        ? require('../assets/LOGOBLACK.png')
+        : require('../assets/LOGO.png');
 
     const toggleDrawer = () => {
         if (navigationRef.isReady()) {
@@ -42,6 +46,7 @@ const Header = () => {
                 <Text style={{ color: colors.textSecondary, fontWeight: '600', marginLeft: 4, fontSize: fs(12) }}>Menu</Text>
             </TouchableOpacity>
             <View style={styles.logoRow}>
+                <Image source={headerLogo} style={styles.logoImage} resizeMode="contain" />
                 <Text style={[styles.brandText, { color: colors.primary, fontSize: fs(22) }]}>Hardware</Text>
                 <Text style={[styles.brandText, { color: colors.text, fontSize: fs(22) }]}>Haven</Text>
             </View>
@@ -61,6 +66,11 @@ const styles = StyleSheet.create({
     logoRow: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    logoImage: {
+        width: 34,
+        height: 34,
+        marginRight: 8,
     },
     brandText: {
         fontWeight: 'bold',

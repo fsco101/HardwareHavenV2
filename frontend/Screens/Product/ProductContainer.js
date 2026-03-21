@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native'
 import { Text, TextInput, Searchbar, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProductList from './ProductList'
 import SearchedProduct from "./SearchedProduct";
 import Banner from "../../Shared/Banner";
-import CategoryFilter from "./CategoryFilter";
+import CustomDropdown from '../../Shared/CustomDropdown';
 import axios from "axios";
 import baseURL from "../../config/api";
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,6 +16,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts } from '../../Redux/Actions/productActions';
 
 const ProductContainer = () => {
+    const SEARCH_HISTORY_KEY = 'product_search_history_v1';
     const INITIAL_VISIBLE_ITEMS = 12;
     const LOAD_MORE_BATCH = 8;
 
@@ -26,7 +28,6 @@ const ProductContainer = () => {
     const [productsFiltered, setProductsFiltered] = useState([]);
     const [focus, setFocus] = useState(false);
     const [categories, setCategories] = useState([]);
-    const [active, setActive] = useState(-1);
     const [productsCtg, setProductsCtg] = useState([])
     const [keyword, setKeyword] = useState('')
     const [loading, setLoading] = useState(true)
@@ -38,6 +39,7 @@ const ProductContainer = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
     const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [searchHistory, setSearchHistory] = useState([]);
 
     const pricePresets = [
         { key: 'all', label: 'Any Price', min: '', max: '' },
@@ -45,6 +47,14 @@ const ProductContainer = () => {
         { key: 'mid', label: '500 - 1500', min: '500', max: '1500' },
         { key: 'pro', label: '1500 - 5000', min: '1500', max: '5000' },
         { key: 'premium', label: '5000+', min: '5000', max: '' },
+    ];
+
+    const categoryOptions = [
+        { label: 'All Categories', value: 'all' },
+        ...categories.map((item) => ({
+            label: String(item?.name || 'Category'),
+            value: String(item?._id || item?.id || ''),
+        })).filter((item) => item.value),
     ];
 
     const applyClientFilters = useCallback((sourceProducts = [], options = {}) => {
@@ -97,8 +107,24 @@ const ProductContainer = () => {
         updateFilteredProducts({ searchText: text });
     };
 
+    const closeSearch = () => {
+        setFocus(false);
+        setKeyword('');
+        updateFilteredProducts({ searchText: '' });
+    };
+
     const onBlur = () => {
         setFocus(false);
+    };
+
+    const useHistoryTerm = (term) => {
+        const next = String(term || '').trim();
+        if (!next) return;
+
+        setKeyword(next);
+        setFocus(true);
+        updateFilteredProducts({ searchText: next });
+        addSearchHistory(next);
     };
 
     const changeCtg = (ctg) => {
@@ -112,7 +138,6 @@ const ProductContainer = () => {
         setPriceMax('');
         setSelectedPricePreset('all');
         setSelectedCategoryId('all');
-        setActive(-1);
         updateFilteredProducts({
             categoryId: 'all',
             minRating: 0,
@@ -124,6 +149,45 @@ const ProductContainer = () => {
     useEffect(() => {
         if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
             UIManager.setLayoutAnimationEnabledExperimental(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        const loadSearchHistory = async () => {
+            try {
+                const raw = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+                if (Array.isArray(parsed)) {
+                    setSearchHistory(parsed.filter((x) => typeof x === 'string' && x.trim().length > 0));
+                }
+            } catch (error) {
+                console.log('Load search history error:', error?.message || error);
+            }
+        };
+
+        loadSearchHistory();
+    }, []);
+
+    const addSearchHistory = useCallback(async (term) => {
+        const normalized = String(term || '').trim();
+        if (!normalized) return;
+
+        setSearchHistory((prev) => {
+            const deduped = prev.filter((item) => item.toLowerCase() !== normalized.toLowerCase());
+            const next = [normalized, ...deduped].slice(0, 8);
+            AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next)).catch((error) => {
+                console.log('Save search history error:', error?.message || error);
+            });
+            return next;
+        });
+    }, []);
+
+    const clearSearchHistory = useCallback(async () => {
+        setSearchHistory([]);
+        try {
+            await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+        } catch (error) {
+            console.log('Clear search history error:', error?.message || error);
         }
     }, []);
 
@@ -148,7 +212,6 @@ const ProductContainer = () => {
         useCallback(
             () => {
                 setFocus(false);
-                setActive(-1);
                 setSelectedCategoryId('all');
                 setSelectedPricePreset('all');
                 setShowAdvancedFilters(true);
@@ -168,7 +231,6 @@ const ProductContainer = () => {
                     setProductsFiltered([]);
                     setFocus(false);
                     setCategories([]);
-                    setActive(-1);
                 };
             },
             [dispatch],
@@ -209,26 +271,36 @@ const ProductContainer = () => {
                 onChangeText={searchProduct}
                 value={keyword}
                 onClearIconPress={onBlur}
-                style={{ backgroundColor: colors.inputBg, margin: spacing.sm, borderRadius: ws(12) }}
+                onSubmitEditing={() => addSearchHistory(keyword)}
+                style={{
+                    backgroundColor: colors.inputBg,
+                    marginHorizontal: spacing.sm,
+                    marginTop: spacing.sm,
+                    marginBottom: spacing.xs,
+                    borderRadius: ws(12),
+                }}
                 inputStyle={{ color: colors.text, fontSize: fs(15) }}
                 placeholderTextColor={colors.textSecondary}
                 iconColor={colors.primary}
             />
             {focus === true ? (
-                <SearchedProduct productsFiltered={productsFiltered} />
+                <SearchedProduct
+                    productsFiltered={productsFiltered}
+                    searchHistory={searchHistory}
+                    onSelectHistory={useHistoryTerm}
+                    onClearHistory={clearSearchHistory}
+                    onClose={closeSearch}
+                    onSelectProduct={() => addSearchHistory(keyword)}
+                />
             ) : (
-                <ScrollView onScroll={handleListScroll} scrollEventThrottle={16}>
-                    <View>
+                <ScrollView
+                    onScroll={handleListScroll}
+                    scrollEventThrottle={16}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: spacing.lg }}
+                >
+                    <View style={{ marginHorizontal: spacing.sm, marginBottom: spacing.sm }}>
                         <Banner />
-                    </View>
-                    <View>
-                        <CategoryFilter
-                            categories={categories}
-                            categoryFilter={changeCtg}
-                            productsCtg={productsCtg}
-                            active={active}
-                            setActive={setActive}
-                        />
                     </View>
                     <View style={[styles.filtersCard, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.sm, marginBottom: spacing.sm, padding: spacing.md }]}> 
                         <View style={styles.filterHeadRow}>
@@ -256,7 +328,19 @@ const ProductContainer = () => {
 
                         {showAdvancedFilters ? (
                             <>
-                                <Text style={[styles.filterLabel, { color: colors.textSecondary, fontSize: fs(12) }]}>Rating</Text>
+                                <Text style={[styles.filterLabel, { color: colors.textSecondary, fontSize: fs(12) }]}>Category</Text>
+                                <CustomDropdown
+                                    data={categoryOptions}
+                                    labelKey="label"
+                                    valueKey="value"
+                                    value={selectedCategoryId}
+                                    onSelect={changeCtg}
+                                    placeholder="Select category"
+                                    icon="grid-outline"
+                                    searchable
+                                />
+
+                                <Text style={[styles.filterLabel, { color: colors.textSecondary, fontSize: fs(12), marginTop: spacing.sm }]}>Rating</Text>
                                 <View style={styles.ratingRow}>
                                     {[0, 1, 2, 3, 4, 5].map((value) => (
                                         <TouchableOpacity
@@ -276,11 +360,11 @@ const ProductContainer = () => {
                                         >
                                             <Ionicons
                                                 name={value === 0 ? 'sparkles-outline' : 'star'}
-                                                size={13}
+                                                size={12}
                                                 color={ratingMin === value ? colors.textOnPrimary : colors.accent}
                                                 style={{ marginRight: 4 }}
                                             />
-                                            <Text style={{ color: ratingMin === value ? colors.textOnPrimary : colors.text, fontSize: fs(12), fontWeight: '600' }}>
+                                            <Text style={{ color: ratingMin === value ? colors.textOnPrimary : colors.text, fontSize: fs(11), fontWeight: '600' }}>
                                                 {value === 0 ? 'Any' : `${value}+`}
                                             </Text>
                                         </TouchableOpacity>
@@ -322,6 +406,7 @@ const ProductContainer = () => {
                                 <View style={styles.priceRow}>
                                     <TextInput
                                         mode="outlined"
+                                        dense
                                         label="Min Price"
                                         value={priceMin}
                                         onChangeText={(text) => {
@@ -334,9 +419,11 @@ const ProductContainer = () => {
                                         outlineColor={colors.border}
                                         activeOutlineColor={colors.primary}
                                         textColor={colors.text}
+                                        contentStyle={{ fontSize: fs(13), paddingVertical: 0 }}
                                     />
                                     <TextInput
                                         mode="outlined"
+                                        dense
                                         label="Max Price"
                                         value={priceMax}
                                         onChangeText={(text) => {
@@ -349,6 +436,7 @@ const ProductContainer = () => {
                                         outlineColor={colors.border}
                                         activeOutlineColor={colors.primary}
                                         textColor={colors.text}
+                                        contentStyle={{ fontSize: fs(13), paddingVertical: 0 }}
                                     />
                                 </View>
                             </>
@@ -357,6 +445,10 @@ const ProductContainer = () => {
                         <View style={styles.activeFilterRow}>
                             <Text style={{ color: colors.textSecondary, fontSize: fs(12) }}>Active:</Text>
                             <Text style={{ color: colors.text, fontSize: fs(12), marginLeft: 6 }}>
+                                {selectedCategoryId !== 'all'
+                                    ? `${categoryOptions.find((item) => item.value === selectedCategoryId)?.label || 'Category'}`
+                                    : 'All categories'}
+                                {' • '}
                                 {ratingMin > 0 ? `${ratingMin}+ stars` : 'Any rating'}
                                 {' • '}
                                 {priceMin || priceMax ? `P${priceMin || 0} - P${priceMax || 'up'}` : 'Any price'}
@@ -369,7 +461,7 @@ const ProductContainer = () => {
                         </View>
                     ) : null}
                     {productsCtg.length > 0 ? (
-                        <View style={[styles.listContainer, { backgroundColor: colors.background }]}>
+                        <View style={[styles.listContainer, { backgroundColor: colors.background, paddingHorizontal: ws(4) }]}> 
                             {visibleProducts.map((item) => {
                                 return (
                                     <ProductList key={item.id} item={item} />
@@ -404,8 +496,9 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: "row",
         alignItems: "flex-start",
+        justifyContent: 'space-between',
         flexWrap: "wrap",
-        paddingBottom: 20,
+        paddingBottom: 12,
     },
     center: {
         justifyContent: 'center',
@@ -419,7 +512,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        marginBottom: 10,
     },
     filterTitleWrap: {
         flexDirection: 'row',
@@ -432,11 +525,12 @@ const styles = StyleSheet.create({
     ratingRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 6,
+        alignItems: 'center',
     },
     ratingChip: {
-        paddingHorizontal: 10,
-        paddingVertical: 7,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: 'row',
@@ -456,11 +550,12 @@ const styles = StyleSheet.create({
     },
     priceRow: {
         flexDirection: 'row',
-        gap: 10,
+        gap: 8,
         marginTop: 2,
     },
     priceInput: {
         flex: 1,
+        height: 44,
     },
     clearBtn: {
         alignSelf: 'flex-start',
@@ -474,6 +569,7 @@ const styles = StyleSheet.create({
     activeFilterRow: {
         marginTop: 10,
         flexDirection: 'row',
+        justifyContent: 'flex-start',
         alignItems: 'center',
         flexWrap: 'wrap',
     }

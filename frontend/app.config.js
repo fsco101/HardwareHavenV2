@@ -10,6 +10,7 @@ module.exports = ({ config }) => {
   const apiURL = explicitApiURL || (apiHost.toLowerCase() === 'auto' ? '' : `http://${apiHost}:${apiPort}/api/v1/`);
   const appScheme = process.env.APP_SCHEME || config.expo?.scheme || 'hardwarehaven';
   const androidPackage = process.env.ANDROID_PACKAGE || config.expo?.android?.package || 'com.hardwarehavenexpo.app';
+  const googleServicesFile = process.env.GOOGLE_SERVICES_FILE || './google-services.json';
 
   return {
     ...config,
@@ -19,8 +20,9 @@ module.exports = ({ config }) => {
       android: {
         ...(config.expo?.android || {}),
         package: androidPackage,
+        googleServicesFile,
       },
-      plugins: Array.from(new Set([...(config.expo?.plugins || []), 'expo-sqlite', 'expo-secure-store', 'expo-web-browser'])),
+      plugins: Array.from(new Set([...(config.expo?.plugins || []), 'expo-sqlite', 'expo-secure-store', 'expo-web-browser', 'expo-notifications'])),
       extra: {
         ...(config.expo?.extra || {}),
         API_HOST: apiHost,

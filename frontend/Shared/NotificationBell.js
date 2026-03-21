@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import baseURL from '../config/api';
 import { formatPHDate } from '../assets/common/phTime';
+import Toast from './SnackbarService';
 
 const NotificationBell = () => {
     const colors = useTheme();
@@ -16,6 +17,7 @@ const NotificationBell = () => {
         unreadCount,
         markAsRead,
         markAllAsRead,
+        deleteReadNotifications,
         isNotificationsVisible,
         openNotifications,
         closeNotifications,
@@ -23,6 +25,45 @@ const NotificationBell = () => {
     } = useNotifications();
     const { fs, spacing, ms } = useResponsive();
     const navigation = useNavigation();
+    const [selectionMode, setSelectionMode] = React.useState(false);
+    const [selectedIds, setSelectedIds] = React.useState([]);
+
+    const resetSelection = React.useCallback(() => {
+        setSelectionMode(false);
+        setSelectedIds([]);
+    }, []);
+
+    const handleCloseNotifications = () => {
+        resetSelection();
+        closeNotifications();
+    };
+
+    const toggleSelect = (item) => {
+        if (!item?.read) {
+            return;
+        }
+
+        const id = String(item._id || item.id || '');
+        if (!id) return;
+
+        setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
+
+    const handleDeleteSelected = async () => {
+        if (!selectedIds.length) {
+            Toast.show({ topOffset: 60, type: 'info', text1: 'Select read notifications first' });
+            return;
+        }
+
+        const result = await deleteReadNotifications(selectedIds);
+        if (!result?.success) {
+            Toast.show({ topOffset: 60, type: 'error', text1: result?.message || 'Delete failed' });
+            return;
+        }
+
+        Toast.show({ topOffset: 60, type: 'success', text1: 'Selected notifications deleted' });
+        resetSelection();
+    };
 
     const getIcon = (type) => {
         switch (type) {
@@ -47,10 +88,15 @@ const NotificationBell = () => {
     };
 
     const handleNotificationPress = async (item) => {
+        if (selectionMode) {
+            toggleSelect(item);
+            return;
+        }
+
         if (!item.read) markAsRead(item._id);
 
         if (isOrderNotification && isOrderNotification(item.type)) {
-            closeNotifications();
+            handleCloseNotifications();
             const parentNavigation = navigation.getParent();
             const orderParams = item.orderId ? { screen: 'Order Detail', params: { orderId: item.orderId } } : { screen: 'My Orders' };
 
@@ -63,7 +109,7 @@ const NotificationBell = () => {
         }
 
         if (item.type === 'promotion' && item.productId) {
-            closeNotifications();
+            handleCloseNotifications();
             try {
                 const res = await axios.get(`${baseURL}products/${item.productId}`);
                 if (res.data) {
@@ -113,19 +159,40 @@ const NotificationBell = () => {
                 visible={isNotificationsVisible}
                 animationType="slide"
                 transparent={false}
-                onRequestClose={closeNotifications}
+                onRequestClose={handleCloseNotifications}
             >
                 <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
                     <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                             <Text style={[styles.title, { color: colors.text, fontSize: fs(18) }]}>Notifications</Text>
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                {unreadCount > 0 && (
+                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                                {!selectionMode && unreadCount > 0 && (
                                     <TouchableOpacity onPress={markAllAsRead}>
                                         <Text style={{ color: colors.secondary, fontSize: fs(12) }}>Mark all read</Text>
                                     </TouchableOpacity>
                                 )}
-                                <TouchableOpacity onPress={closeNotifications}>
+
+                                {!selectionMode && notifications.some((n) => n.read) && (
+                                    <TouchableOpacity onPress={() => setSelectionMode(true)}>
+                                        <Text style={{ color: colors.secondary, fontSize: fs(12) }}>Select</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {selectionMode && (
+                                    <TouchableOpacity onPress={handleDeleteSelected}>
+                                        <Text style={{ color: colors.danger, fontSize: fs(12), fontWeight: '700' }}>
+                                            Delete ({selectedIds.length})
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {selectionMode && (
+                                    <TouchableOpacity onPress={resetSelection}>
+                                        <Text style={{ color: colors.textSecondary, fontSize: fs(12) }}>Cancel</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity onPress={handleCloseNotifications}>
                                     <Ionicons name="close" size={24} color={colors.text} />
                                 </TouchableOpacity>
                             </View>
@@ -153,6 +220,14 @@ const NotificationBell = () => {
                                             handleNotificationPress(item);
                                         }}
                                     >
+                                        {selectionMode && (
+                                            <Ionicons
+                                                name={selectedIds.includes(String(item._id || item.id || '')) ? 'checkbox' : 'square-outline'}
+                                                size={22}
+                                                color={item.read ? colors.secondary : colors.border}
+                                                style={{ marginRight: 8 }}
+                                            />
+                                        )}
                                         <Ionicons
                                             name={getIcon(item.type)}
                                             size={24}

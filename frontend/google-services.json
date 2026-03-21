@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "683190326446",
+    "project_id": "hardwarehavenexpo",
+    "storage_bucket": "hardwarehavenexpo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683190326446:android:f51b64cefef9658d36093f",
+        "android_client_info": {
+          "package_name": "HardwareHaven.Android"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "683190326446-qrdvg09ta1ti95lbj6oorq07g12hiaor.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwXHlzqaZ5TznUaPZqMhKuv1pGyDFL4Xw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "683190326446-qrdvg09ta1ti95lbj6oorq07g12hiaor.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

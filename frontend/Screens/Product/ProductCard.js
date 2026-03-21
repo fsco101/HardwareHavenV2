@@ -18,7 +18,7 @@ import PromotionCountdown from '../../Shared/PromotionCountdown';
 import { addToCart } from '../../Redux/Actions/cartActions';
 
 const ProductCard = (props) => {
-    const { name, price, image, countInStock, _id, description, richDescription, onPressDetail } = props;
+    const { name, price, image, countInStock, _id, description, richDescription, onPressDetail, rating, numReviews } = props;
     const colors = useTheme();
     const { ws, fs, cardWidth, spacing, ms } = useResponsive();
     const { getPromoForProduct } = usePromotions();
@@ -39,6 +39,8 @@ const ProductCard = (props) => {
     const cHeight = cWidth * 1.78;
     const imgHeight = cWidth - ws(26);
     const descriptionText = String(description || richDescription || '').trim();
+    const ratingValue = Number(rating || 0);
+    const reviewCount = Number(numReviews || 0);
 
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const cleanUri = (value) => {
@@ -158,6 +160,7 @@ const ProductCard = (props) => {
             ]}
         >
             <TouchableOpacity activeOpacity={0.85} onPress={onPressDetail} style={{ width: '100%' }}>
+                <View style={[styles.imageWrap, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: spacing.xs }]}> 
                 <Animated.Image
                     style={[
                         styles.image,
@@ -210,20 +213,51 @@ const ProductCard = (props) => {
                         </View>
                     </>
                 ) : null}
+                </View>
+
+                <View style={styles.infoBlock}>
                 <Text style={[styles.title, { color: colors.text, fontSize: fs(14) }]}>
                     {name.length > 20 ? `${name.substring(0, 17)}...` : name}
                 </Text>
+
+                <View style={[styles.metaRow, { marginTop: spacing.xs }]}> 
+                    <View style={[styles.stockPill, { backgroundColor: countInStock > 0 ? colors.success : colors.danger }]}> 
+                        <Text style={{ color: colors.textOnPrimary, fontSize: fs(10), fontWeight: '700' }}>
+                            {countInStock > 0 ? `${countInStock} in stock` : 'Out of stock'}
+                        </Text>
+                    </View>
+                </View>
+
                 <Text
                     style={{ color: colors.textSecondary, fontSize: fs(11), marginTop: spacing.xs, minHeight: fs(30) }}
                     numberOfLines={2}
                 >
                     {descriptionText || 'High quality hardware product for your next project.'}
                 </Text>
+
+                <View style={[styles.ratingRow, { marginTop: spacing.xs + 2 }]}> 
+                    <View style={styles.starRow}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <Ionicons
+                                key={`${_id || name}-star-${star}`}
+                                name={ratingValue >= star ? 'star' : 'star-outline'}
+                                size={ms(12, 0.2)}
+                                color={colors.accent}
+                                style={{ marginRight: 2 }}
+                            />
+                        ))}
+                    </View>
+                    <Text style={{ color: colors.textSecondary, fontSize: fs(11), marginLeft: 4 }}>
+                        {ratingValue.toFixed(1)} ({reviewCount})
+                    </Text>
+                </View>
+                </View>
             </TouchableOpacity>
 
+            <View style={[styles.priceWrap, { borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm }]}> 
             {promo ? (
-                <View style={{ alignItems: 'center' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ alignItems: 'center', width: '100%' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
                         <Text
                             style={{
                                 color: colors.textSecondary,
@@ -241,9 +275,11 @@ const ProductCard = (props) => {
             ) : (
                 <Text style={[styles.price, { color: colors.accent, fontSize: fs(20) }]}>₱{price}</Text>
             )}
+            </View>
 
             <View style={[styles.purchaseBlock, { marginTop: spacing.xs }]}> 
                 <View style={styles.qtyRow}>
+                    <Text style={{ color: colors.textSecondary, fontSize: fs(11), marginRight: 8, fontWeight: '600' }}>Qty</Text>
                     <TouchableOpacity
                         style={[styles.qtyBtn, { backgroundColor: colors.surfaceLight, opacity: quantity <= 1 ? 0.5 : 1 }]}
                         onPress={decreaseQty}
@@ -308,8 +344,17 @@ const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
         justifyContent: 'space-between',
-        elevation: 4,
+        elevation: 5,
         borderWidth: 1,
+    },
+    imageWrap: {
+        width: '100%',
+        borderRadius: 10,
+        borderWidth: 1,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 130,
     },
     image: {
         backgroundColor: 'transparent',
@@ -349,6 +394,28 @@ const styles = StyleSheet.create({
         borderRadius: 3,
         marginHorizontal: 2,
     },
+    infoBlock: {
+        width: '100%',
+    },
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    stockPill: {
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+    },
+    starRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     title: {
         fontWeight: 'bold',
         textAlign: 'left',
@@ -358,7 +425,12 @@ const styles = StyleSheet.create({
     },
     price: {
         fontWeight: 'bold',
-        marginTop: 6,
+        marginTop: 2,
+    },
+    priceWrap: {
+        width: '100%',
+        alignItems: 'center',
+        borderTopWidth: 1,
     },
     purchaseBlock: {
         width: '100%',

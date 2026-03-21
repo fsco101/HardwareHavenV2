@@ -50,11 +50,16 @@ async function registerForPushNotificationsAsync() {
             return null;
         }
 
-        const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
-        const tokenResponse = projectId
-            ? await Notifications.getExpoPushTokenAsync({ projectId })
-            : await Notifications.getExpoPushTokenAsync();
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('default', {
+                name: 'default',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF6600',
+            });
+        }
 
+        const tokenResponse = await Notifications.getDevicePushTokenAsync();
         return tokenResponse?.data || null;
     } catch (error) {
         const errorMessage = String(error?.message || error);
@@ -188,6 +193,32 @@ export const NotificationProvider = ({ children }) => {
         }
     }, [userId]);
 
+    const deleteReadNotifications = useCallback(async (ids = []) => {
+        if (!userId) return { success: false, message: 'Missing user context' };
+
+        const selectedIds = (Array.isArray(ids) ? ids : [])
+            .map((id) => String(id || '').trim())
+            .filter(Boolean);
+
+        if (!selectedIds.length) {
+            return { success: false, message: 'No notifications selected' };
+        }
+
+        try {
+            const jwtToken = await getToken();
+            await axios.delete(`${baseURL}notifications/bulk`, {
+                data: { ids: selectedIds },
+                headers: jwtToken ? { Authorization: `Bearer ${jwtToken}` } : undefined,
+            });
+
+            setNotifications((prev) => prev.filter((n) => !selectedIds.includes(String(n._id || n.id || ''))));
+            return { success: true };
+        } catch (err) {
+            const message = err?.response?.data?.message || err.message || 'Delete notifications failed';
+            return { success: false, message };
+        }
+    }, [userId]);
+
     const openNotifications = useCallback(() => {
         setIsNotificationsVisible(true);
     }, []);
@@ -210,6 +241,7 @@ export const NotificationProvider = ({ children }) => {
             fetchNotifications,
             markAsRead,
             markAllAsRead,
+            deleteReadNotifications,
             isOrderNotification,
         }}>
             {children}

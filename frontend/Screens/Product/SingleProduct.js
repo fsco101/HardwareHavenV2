@@ -4,12 +4,14 @@ import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { addToCart } from '../../Redux/Actions/cartActions'
 import { fetchReviews, createReview, updateReview } from '../../Redux/Actions/reviewActions'
+import { fetchProducts } from '../../Redux/Actions/productActions'
 import { useDispatch, useSelector } from 'react-redux'
 import Toast from '../../Shared/SnackbarService';
 import { useResponsive } from '../../assets/common/responsive';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
 import { usePromotions } from '../../Context/Store/PromotionContext';
 import PromotionCountdown from '../../Shared/PromotionCountdown';
+import YouMayLike from './YouMayLike';
 
 const StarRating = ({ rating, size = 18, color = '#ffd60a', onPress }) => {
     const stars = [1, 2, 3, 4, 5];
@@ -37,6 +39,7 @@ const SingleProduct = ({ route }) => {
     const context = useContext(AuthGlobal);
     const userId = context.stateUser?.user?.userId;
     const cartItems = useSelector((state) => state.cartItems);
+    const productsState = useSelector((state) => state.products);
     const { getPromoForProduct } = usePromotions();
 
     const [quantity, setQuantity] = useState(1);
@@ -84,6 +87,12 @@ const SingleProduct = ({ route }) => {
             dispatch(fetchReviews(item._id));
         }
     }, [item]);
+
+    useEffect(() => {
+        if (!Array.isArray(productsState?.items) || productsState.items.length === 0) {
+            dispatch(fetchProducts());
+        }
+    }, [dispatch, productsState?.items]);
 
     useEffect(() => {
         setImageIndex(0);
@@ -477,6 +486,12 @@ const SingleProduct = ({ route }) => {
                         ))
                     )}
                 </View>
+
+                <YouMayLike
+                    products={Array.isArray(productsState?.items) ? productsState.items : []}
+                    currentProductId={item?._id || item?.id}
+                    currentCategoryId={item?.category?._id || item?.category?.id || item?.category}
+                />
             </ScrollView>
         </View>
     )

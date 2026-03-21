@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback } from 'react';
+import React, { useState, useContext, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
@@ -11,6 +11,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { cancelOrder, confirmOrderDelivery, fetchMyOrders } from '../../Redux/Actions/orderActions';
 import { getToken } from '../../assets/common/tokenStorage';
 import { formatOrderNumber } from '../../assets/common/orderNumber';
+import axios from 'axios';
+import baseURL from '../../config/api';
 
 const CANCEL_REASONS = [
     'Changed my mind',
@@ -33,6 +35,9 @@ const UserOrders = () => {
     const [activeTab, setActiveTab] = useState('active');
     const [confirmModalVisible, setConfirmModalVisible] = useState(false);
     const [confirmingDelivery, setConfirmingDelivery] = useState(false);
+    const [historySelectionMode, setHistorySelectionMode] = useState(false);
+    const [selectedHistoryIds, setSelectedHistoryIds] = useState([]);
+    const [deletingHistory, setDeletingHistory] = useState(false);
     const dispatch = useDispatch();
     const orders = useSelector((state) => state.orders.myOrders);
     const loading = useSelector((state) => state.orders.loading);
@@ -57,6 +62,11 @@ const UserOrders = () => {
     const fetchOrders = async () => {
         dispatch(fetchMyOrders(userId));
     };
+
+    useEffect(() => {
+        setHistorySelectionMode(false);
+        setSelectedHistoryIds([]);
+    }, [activeTab]);
 
     const openCancelModal = (order) => {
         setSelectedOrder(order);
@@ -159,15 +169,75 @@ const UserOrders = () => {
         }
     };
 
+    const toggleHistorySelect = (order) => {
+        if (!['Delivered', 'Cancelled'].includes(order?.status)) {
+            return;
+        }
+
+        const id = String(order?._id || order?.id || '');
+        if (!id) return;
+
+        setSelectedHistoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
+
+    const handleDeleteSelectedHistory = async () => {
+        if (!selectedHistoryIds.length) {
+            Toast.show({ topOffset: 60, type: 'info', text1: 'Select history orders first' });
+            return;
+        }
+
+        setDeletingHistory(true);
+        try {
+            const token = await getToken();
+            const res = await axios.delete(`${baseURL}orders/history/bulk`, {
+                data: { ids: selectedHistoryIds },
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            });
+
+            const deletedCount = Number(res?.data?.deletedCount || 0);
+            Toast.show({ topOffset: 60, type: 'success', text1: `${deletedCount} order(s) deleted from history` });
+            setSelectedHistoryIds([]);
+            setHistorySelectionMode(false);
+            fetchOrders();
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || 'Failed to delete history orders';
+            Toast.show({ topOffset: 60, type: 'error', text1: msg });
+        } finally {
+            setDeletingHistory(false);
+        }
+    };
+
     const renderOrder = ({ item }) => {
         const canCancel = ['Pending', 'Processing'].includes(item.status);
         const canConfirmDelivered = item.status === 'Shipped';
+        const orderId = String(item._id || item.id || '');
+        const canSelectInHistory = activeTab === 'history' && ['Delivered', 'Cancelled'].includes(item.status);
+        const isSelected = selectedHistoryIds.includes(orderId);
+
         return (
-            <View style={[styles.orderCard, { backgroundColor: colors.cardBg, borderLeftColor: getStatusColor(item.status), padding: spacing.md, margin: spacing.sm }]}>
+            <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => {
+                    if (historySelectionMode && canSelectInHistory) {
+                        toggleHistorySelect(item);
+                    }
+                }}
+                style={[styles.orderCard, { backgroundColor: colors.cardBg, borderLeftColor: getStatusColor(item.status), padding: spacing.md, margin: spacing.sm }]}
+            >
                 <View style={styles.orderHeader}>
-                    <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(14) }}>
-                        Order #{formatOrderNumber(item)}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        {historySelectionMode && canSelectInHistory && (
+                            <Ionicons
+                                name={isSelected ? 'checkbox' : 'square-outline'}
+                                size={20}
+                                color={colors.secondary}
+                                style={{ marginRight: 8 }}
+                            />
+                        )}
+                        <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(14) }}>
+                            Order #{formatOrderNumber(item)}
+                        </Text>
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name={getStatusIcon(item.status)} size={16} color={getStatusColor(item.status)} />
                         <Text style={{ color: getStatusColor(item.status), fontWeight: '600', marginLeft: 4, fontSize: fs(13) }}>
@@ -205,7 +275,7 @@ const UserOrders = () => {
                             P{(item.totalPrice || 0).toFixed(2)}
                         </Text>
                     </View>
-                    {canCancel && (
+                    {!historySelectionMode && canCancel && (
                         <TouchableOpacity
                             style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
                             onPress={() => openCancelModal(item)}
@@ -214,7 +284,7 @@ const UserOrders = () => {
                             <Text style={{ color: colors.textOnPrimary, fontWeight: '600', marginLeft: 4, fontSize: fs(12) }}>Cancel</Text>
                         </TouchableOpacity>
                     )}
-                    {canConfirmDelivered && (
+                    {!historySelectionMode && canConfirmDelivered && (
                         <TouchableOpacity
                             style={[styles.confirmBtn, { backgroundColor: colors.success }]}
                             onPress={() => openDeliveredConfirmation(item)}
@@ -232,7 +302,7 @@ const UserOrders = () => {
                     )}
                 </View>
 
-                {item.status === 'Delivered' && (
+                {!historySelectionMode && item.status === 'Delivered' && (
                     <TouchableOpacity
                         style={[styles.reviewBtn, { backgroundColor: colors.secondary, marginTop: spacing.sm }]}
                         onPress={() => handleReviewProduct(item)}
@@ -243,7 +313,7 @@ const UserOrders = () => {
                         </Text>
                     </TouchableOpacity>
                 )}
-            </View>
+            </TouchableOpacity>
         );
     };
 
@@ -359,6 +429,50 @@ const UserOrders = () => {
                 </TouchableOpacity>
             </View>
 
+            {activeTab === 'history' && displayedOrders.length > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+                    {!historySelectionMode ? (
+                        <TouchableOpacity
+                            style={[styles.selectBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                            onPress={() => setHistorySelectionMode(true)}
+                        >
+                            <Ionicons name="checkmark-circle-outline" size={16} color={colors.secondary} />
+                            <Text style={{ color: colors.secondary, fontWeight: '700', marginLeft: 6 }}>Select Orders</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity
+                                style={[styles.selectBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                                onPress={() => {
+                                    setHistorySelectionMode(false);
+                                    setSelectedHistoryIds([]);
+                                }}
+                                disabled={deletingHistory}
+                            >
+                                <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.deleteHistoryBtn, { backgroundColor: colors.danger, marginLeft: spacing.sm }]}
+                                onPress={handleDeleteSelectedHistory}
+                                disabled={deletingHistory}
+                            >
+                                {deletingHistory ? (
+                                    <ActivityIndicator size="small" color={colors.textOnPrimary} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="trash-outline" size={16} color={colors.textOnPrimary} />
+                                        <Text style={{ color: colors.textOnPrimary, fontWeight: '700', marginLeft: 6 }}>
+                                            Delete ({selectedHistoryIds.length})
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </View>
+            )}
+
             {loading ? (
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
@@ -413,6 +527,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    selectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    deleteHistoryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
     },
     orderFooter: {
         flexDirection: 'row',
