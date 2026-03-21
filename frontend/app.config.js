@@ -1,5 +1,6 @@
 const path = require('path');
 const dotenv = require('dotenv');
+const fs = require('fs');
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
@@ -10,7 +11,11 @@ module.exports = ({ config }) => {
   const apiURL = explicitApiURL || (apiHost.toLowerCase() === 'auto' ? '' : `http://${apiHost}:${apiPort}/api/v1/`);
   const appScheme = process.env.APP_SCHEME || config.expo?.scheme || 'hardwarehaven';
   const androidPackage = process.env.ANDROID_PACKAGE || config.expo?.android?.package || 'com.hardwarehavenexpo.app';
-  const googleServicesFile = process.env.GOOGLE_SERVICES_FILE || './google-services.json';
+  const googleServicesFile = (process.env.GOOGLE_SERVICES_FILE || '').trim();
+  const resolvedGoogleServicesFile = googleServicesFile
+    ? path.resolve(__dirname, googleServicesFile)
+    : '';
+  const hasGoogleServicesFile = Boolean(resolvedGoogleServicesFile) && fs.existsSync(resolvedGoogleServicesFile);
 
   return {
     ...config,
@@ -20,7 +25,7 @@ module.exports = ({ config }) => {
       android: {
         ...(config.expo?.android || {}),
         package: androidPackage,
-        googleServicesFile,
+        ...(hasGoogleServicesFile ? { googleServicesFile } : {}),
       },
       plugins: Array.from(new Set([...(config.expo?.plugins || []), 'expo-sqlite', 'expo-secure-store', 'expo-web-browser', 'expo-notifications'])),
       extra: {

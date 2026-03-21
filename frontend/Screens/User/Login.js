@@ -36,15 +36,22 @@ const Login = (props) => {
     const [deactivationAlert, setDeactivationAlert] = useState({ visible: false, message: '' })
 
     const isNative = Platform.OS !== 'web';
+    const isExpoGo =
+        Constants.appOwnership === 'expo' ||
+        Constants.executionEnvironment === 'storeClient';
     const projectNameForProxy =
         Constants.expoConfig?.originalFullName ||
         (Constants.expoConfig?.owner && Constants.expoConfig?.slug
             ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
-            : '@chunmaru/HardwareHaven');
-    const useProxy = isNative;
-    const redirectUri = isNative
-        ? 'https://auth.expo.io/@chunmaru/HardwareHaven'
-        : AuthSession.makeRedirectUri();
+            : undefined);
+    const nativeRedirectCandidate = AuthSession.makeRedirectUri({
+        scheme: Constants.expoConfig?.scheme,
+    });
+    const useProxy = isNative && (isExpoGo || nativeRedirectCandidate.startsWith('exp://'));
+    const redirectUri = AuthSession.makeRedirectUri({
+        useProxy,
+        scheme: Constants.expoConfig?.scheme,
+    });
 
     const getLoginErrorToast = (result) => {
         const rawMessage = String(result?.message || '').toLowerCase();
@@ -77,7 +84,7 @@ const Login = (props) => {
     };
 
     const googleRequestConfig = {
-        // Expo Go/proxy flow must use a Web OAuth client ID tied to auth.expo.io redirect.
+        // Expo Go/proxy flow uses Web OAuth client; native builds use Android/iOS client IDs.
         expoClientId: googleAuthConfig.expoClientId || googleAuthConfig.webClientId,
         webClientId: googleAuthConfig.webClientId || googleAuthConfig.expoClientId,
         // Android SDK validates this field on Android even when using proxy.
