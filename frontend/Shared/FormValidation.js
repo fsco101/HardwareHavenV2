@@ -8,6 +8,17 @@ const RESET_CODE_REGEX = /^[0-9]{6}$/;
 
 const normalize = (value) => (value == null ? '' : String(value).trim());
 const isEmpty = (value) => normalize(value).length === 0;
+const firstError = (...errors) => errors.find(Boolean) || '';
+const required = (value, message) => (isEmpty(value) ? message : '');
+const minLength = (value, min, message) => (value.length < min ? message : '');
+const positiveNumber = (value, message) => {
+    const n = Number(value);
+    return Number.isNaN(n) || n <= 0 ? message : '';
+};
+const nonNegativeNumber = (value, message) => {
+    const n = Number(value);
+    return Number.isNaN(n) || n < 0 ? message : '';
+};
 
 /**
  * Validates a single field and returns an error message or empty string.
@@ -17,27 +28,32 @@ export const validateField = (name, value, allFields = {}) => {
 
     switch (name) {
         case 'email':
-            if (isEmpty(v)) return 'Email is required';
-            if (!EMAIL_REGEX.test(v.toLowerCase())) return 'Please enter a valid email address';
-            return '';
+            return firstError(
+                required(v, 'Email is required'),
+                !EMAIL_REGEX.test(v.toLowerCase()) ? 'Please enter a valid email address' : ''
+            );
 
         case 'password':
-            if (isEmpty(v)) return 'Password is required';
-            if (v.length < 6) return 'Password must be at least 6 characters';
-            return '';
+            return firstError(
+                required(v, 'Password is required'),
+                minLength(v, 6, 'Password must be at least 6 characters')
+            );
 
         case 'oldPassword':
-            if (isEmpty(v)) return 'Old password is required';
-            if (v.length < 6) return 'Password must be at least 6 characters';
-            return '';
+            return firstError(
+                required(v, 'Old password is required'),
+                minLength(v, 6, 'Password must be at least 6 characters')
+            );
 
         case 'newPassword':
-            if (isEmpty(v)) return 'New password is required';
-            if (v.length < 6) return 'Password must be at least 6 characters';
-            return '';
+            return firstError(
+                required(v, 'New password is required'),
+                minLength(v, 6, 'Password must be at least 6 characters')
+            );
 
         case 'confirmPassword': {
-            if (isEmpty(v)) return 'Please confirm your password';
+            const requiredError = required(v, 'Please confirm your password');
+            if (requiredError) return requiredError;
             const compareWith = normalize(allFields.newPassword ?? allFields.password ?? '');
             if (compareWith && v !== compareWith) return 'Passwords do not match';
             return '';
@@ -45,89 +61,76 @@ export const validateField = (name, value, allFields = {}) => {
 
         case 'resetCode':
         case 'code':
-            if (isEmpty(v)) return 'Reset code is required';
-            if (!RESET_CODE_REGEX.test(v)) return 'Reset code must be 6 digits';
-            return '';
+            return firstError(
+                required(v, 'Reset code is required'),
+                !RESET_CODE_REGEX.test(v) ? 'Reset code must be 6 digits' : ''
+            );
 
         case 'name':
-            if (isEmpty(v)) return 'Name is required';
-            if (v.length < 2) return 'Name must be at least 2 characters';
-            return '';
+            return firstError(required(v, 'Name is required'), minLength(v, 2, 'Name must be at least 2 characters'));
 
         case 'phone': {
-            if (isEmpty(v)) return 'Phone number is required';
+            const requiredError = required(v, 'Phone number is required');
+            if (requiredError) return requiredError;
             const digitsOnly = v.replace(/\D/g, '');
             if (!PHONE_REGEX.test(digitsOnly)) return 'Phone must be 10-13 digits';
             return '';
         }
 
         case 'brand':
-            if (isEmpty(v)) return 'Brand is required';
-            return '';
+            return required(v, 'Brand is required');
 
         case 'price':
         case 'discountedPrice':
-            if (isEmpty(v)) return 'Price is required';
-            if (Number.isNaN(Number(v)) || Number(v) <= 0) return 'Price must be a positive number';
-            return '';
+            return firstError(required(v, 'Price is required'), positiveNumber(v, 'Price must be a positive number'));
 
         case 'description':
-            if (isEmpty(v)) return 'Description is required';
-            if (v.length < 5) return 'Description must be at least 5 characters';
-            return '';
+            return firstError(
+                required(v, 'Description is required'),
+                minLength(v, 5, 'Description must be at least 5 characters')
+            );
 
         case 'countInStock':
             if (isEmpty(v) && v !== '0') return 'Stock count is required';
-            if (Number.isNaN(Number(v)) || Number(v) < 0) return 'Stock must be 0 or greater';
-            return '';
+            return nonNegativeNumber(v, 'Stock must be 0 or greater');
 
         case 'category':
-            if (isEmpty(v)) return 'Category is required';
-            return '';
+            return required(v, 'Category is required');
 
         case 'categoryName':
-            if (isEmpty(v)) return 'Category name is required';
-            if (v.length < 2) return 'Category name must be at least 2 characters';
-            return '';
+            return firstError(
+                required(v, 'Category name is required'),
+                minLength(v, 2, 'Category name must be at least 2 characters')
+            );
 
         case 'street':
-            if (isEmpty(v)) return 'Street is required';
-            if (v.length < 2) return 'Street must be at least 2 characters';
-            return '';
+            return firstError(required(v, 'Street is required'), minLength(v, 2, 'Street must be at least 2 characters'));
 
         case 'address':
         case 'shippingAddress1':
-            if (isEmpty(v)) return 'Address is required';
-            return '';
+            return required(v, 'Address is required');
 
         case 'city':
-            if (isEmpty(v)) return 'City is required';
-            return '';
+            return required(v, 'City is required');
 
         case 'zip':
-            if (isEmpty(v)) return 'Zip code is required';
-            if (!ZIP_REGEX.test(v)) return 'Zip code must be 4-10 digits';
-            return '';
+            return firstError(required(v, 'Zip code is required'), !ZIP_REGEX.test(v) ? 'Zip code must be 4-10 digits' : '');
 
         case 'country':
-            if (isEmpty(v)) return 'Country is required';
-            return '';
-
         case 'region':
-            if (isEmpty(v)) return 'Region is required';
-            return '';
-
         case 'province':
-            if (isEmpty(v)) return 'Province is required';
-            return '';
-
         case 'cityMunicipality':
-            if (isEmpty(v)) return 'City/Municipality is required';
-            return '';
-
         case 'barangay':
-            if (isEmpty(v)) return 'Barangay is required';
-            return '';
+            return required(
+                v,
+                {
+                    country: 'Country is required',
+                    region: 'Region is required',
+                    province: 'Province is required',
+                    cityMunicipality: 'City/Municipality is required',
+                    barangay: 'Barangay is required',
+                }[name]
+            );
 
         default:
             return '';

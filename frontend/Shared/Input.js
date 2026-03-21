@@ -6,13 +6,15 @@ import { useResponsive } from '../assets/common/responsive';
 const Input = (props) => {
     const colors = useTheme();
     const { fs } = useResponsive();
+    const hasError = Boolean(props.error);
+
     return (
         <TextInput
             style={[
                 styles.input,
                 {
                     backgroundColor: colors.inputBg,
-                    borderColor: colors.border,
+                    borderColor: hasError ? colors.danger : colors.border,
                     color: colors.text,
                     height: 44,
                     margin: 6,
@@ -20,6 +22,8 @@ const Input = (props) => {
                     paddingHorizontal: 12,
                     fontSize: fs(14),
                 }
+            ,
+                props.style,
             ]}
             placeholder={props.placeholder}
             placeholderTextColor={colors.textSecondary}
@@ -33,6 +37,7 @@ const Input = (props) => {
             keyboardType={props.keyboardType}
             editable={props.editable}
             selectTextOnFocus={props.selectTextOnFocus}
+            {...props.textInputProps}
         />
     );
 }

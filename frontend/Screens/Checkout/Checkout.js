@@ -261,10 +261,12 @@ const Checkout = (props) => {
                 </View>
 
                 <Input placeholder={"Phone"} name={"phone"} value={phone} keyboardType={"numeric"}
+                    error={!!fieldErrors.phone}
                     editable={false} selectTextOnFocus={false} />
                 {fieldErrors.phone ? <Error message={fieldErrors.phone} /> : null}
 
                 <Input placeholder={"Shipping Address 1"} name={"ShippingAddress1"} value={address}
+                    error={!!fieldErrors.address}
                     editable={false} selectTextOnFocus={false} />
                 {fieldErrors.address ? <Error message={fieldErrors.address} /> : null}
 

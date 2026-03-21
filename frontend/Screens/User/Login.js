@@ -329,11 +329,20 @@ const Login = (props) => {
                     name={"email"}
                     id={"email"}
                     value={email}
+                    error={!!fieldErrors.email}
                     onChangeText={(text) => { setEmail(text.toLowerCase()); setFieldErrors(prev => ({ ...prev, email: '' })); }}
                 />
                 {fieldErrors.email ? <Error message={fieldErrors.email} /> : null}
 
-                <View style={[styles.passwordInputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}> 
+                <View
+                    style={[
+                        styles.passwordInputWrap,
+                        {
+                            backgroundColor: colors.inputBg,
+                            borderColor: fieldErrors.password ? colors.danger : colors.border,
+                        },
+                    ]}
+                > 
                     <TextInput
                         style={[styles.passwordInput, { color: colors.text, fontSize: fs(14) }]}
                         placeholder="Enter Password"

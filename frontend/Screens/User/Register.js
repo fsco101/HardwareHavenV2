@@ -359,6 +359,7 @@ const Register = (props) => {
                     name={"email"}
                     id={"email"}
                     value={email}
+                    error={!!fieldErrors.email}
                     onChangeText={(text) => { setEmail(text.toLowerCase()); clearFieldError('email'); }}
                 />
                 {fieldErrors.email ? <Error message={fieldErrors.email} /> : null}
@@ -374,6 +375,7 @@ const Register = (props) => {
                     name={"name"}
                     id={"name"}
                     value={name}
+                    error={!!fieldErrors.name}
                     onChangeText={(text) => { setName(text); clearFieldError('name'); }}
                 />
                 {fieldErrors.name ? <Error message={fieldErrors.name} /> : null}
@@ -390,6 +392,7 @@ const Register = (props) => {
                     id={"phone"}
                     value={phone}
                     keyboardType={"numeric"}
+                    error={!!fieldErrors.phone}
                     onChangeText={(text) => { setPhone(text); clearFieldError('phone'); }}
                 />
                 {fieldErrors.phone ? <Error message={fieldErrors.phone} /> : null}
@@ -407,6 +410,7 @@ const Register = (props) => {
                         id={"password"}
                         value={password}
                         secureTextEntry={!showPassword}
+                        error={!!fieldErrors.password}
                         onChangeText={(text) => { setPassword(text); clearFieldError('password'); }}
                     />
                     <TouchableOpacity
