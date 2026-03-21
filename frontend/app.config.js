@@ -1,6 +1,5 @@
 const path = require('path');
 const dotenv = require('dotenv');
-const fs = require('fs');
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
@@ -9,13 +8,9 @@ module.exports = ({ config }) => {
   const apiPort = process.env.API_PORT || '4000';
   const explicitApiURL = (process.env.API_URL || '').trim();
   const apiURL = explicitApiURL || (apiHost.toLowerCase() === 'auto' ? '' : `http://${apiHost}:${apiPort}/api/v1/`);
+  const easProjectId = (process.env.EAS_PROJECT_ID || '41f3b1da-e246-4c32-99a1-46146e354259').trim();
   const appScheme = process.env.APP_SCHEME || config.expo?.scheme || 'hardwarehaven';
   const androidPackage = process.env.ANDROID_PACKAGE || config.expo?.android?.package || 'com.hardwarehavenexpo.app';
-  const googleServicesFile = (process.env.GOOGLE_SERVICES_FILE || '').trim();
-  const resolvedGoogleServicesFile = googleServicesFile
-    ? path.resolve(__dirname, googleServicesFile)
-    : '';
-  const hasGoogleServicesFile = Boolean(resolvedGoogleServicesFile) && fs.existsSync(resolvedGoogleServicesFile);
 
   return {
     ...config,
@@ -25,11 +20,18 @@ module.exports = ({ config }) => {
       android: {
         ...(config.expo?.android || {}),
         package: androidPackage,
-        ...(hasGoogleServicesFile ? { googleServicesFile } : {}),
       },
       plugins: Array.from(new Set([...(config.expo?.plugins || []), 'expo-sqlite', 'expo-secure-store', 'expo-web-browser', 'expo-notifications'])),
       extra: {
         ...(config.expo?.extra || {}),
+        ...(easProjectId
+          ? {
+              eas: {
+                ...((config.expo?.extra && config.expo.extra.eas) ? config.expo.extra.eas : {}),
+                projectId: easProjectId,
+              },
+            }
+          : {}),
         API_HOST: apiHost,
         API_PORT: apiPort,
         API_URL: apiURL,
