@@ -45,6 +45,17 @@ async function verifyFirebaseIdToken(idToken) {
     return auth.verifyIdToken(idToken);
 }
 
+function getFirebaseMessaging() {
+    const app = getFirebaseAdminApp();
+    if (!app) {
+        return null;
+    }
+
+    return admin.messaging(app);
+}
+
 module.exports = {
+    getFirebaseAdminApp,
+    getFirebaseMessaging,
     verifyFirebaseIdToken,
 };

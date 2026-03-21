@@ -9,7 +9,7 @@ const { OrderItem } = require('../models/order-item');
 const jwt = require('jsonwebtoken');
 const { sendEmail, orderStatusUpdateEmail, orderCancelledAdminEmail, orderCancelledUserEmail, orderPlacedEmail, orderDeliveredConfirmationAdminEmail } = require('../helpers/emailService');
 const { generateReceiptPDF } = require('../helpers/pdfReceipt');
-const { sendExpoPushNotifications } = require('../helpers/pushNotifications');
+const { sendFirebasePushNotifications } = require('../helpers/pushNotifications');
 const { toOrderNumber } = require('../helpers/orderNumber');
 const router = express.Router();
 
@@ -161,7 +161,7 @@ async function createNotification(req, { userId, title, message, type, orderId }
     const user = await User.findById(userId).select('pushTokens');
     const tokens = user?.pushTokens || [];
     if (tokens.length > 0) {
-        const pushResult = await sendExpoPushNotifications(tokens, {
+        const pushResult = await sendFirebasePushNotifications(tokens, {
             title,
             body: message,
             data: {
@@ -781,6 +781,48 @@ router.put('/cancel/:id', async (req, res) => {
     } catch (error) {
         console.error('Cancel order error:', error);
         res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Delete selected orders from user's history (Delivered/Cancelled only)
+router.delete('/history/bulk', async (req, res) => {
+    try {
+        const auth = getAuthFromRequest(req);
+        if (!auth?.userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+        const normalizedIds = ids
+            .map((id) => String(id || '').trim())
+            .filter(Boolean);
+
+        if (!normalizedIds.length) {
+            return res.status(400).json({ success: false, message: 'No orders selected' });
+        }
+
+        const eligibleOrders = await Order.find({
+            _id: { $in: normalizedIds },
+            user: auth.userId,
+            status: { $in: ['Delivered', 'Cancelled'] },
+        }).select('_id orderItems');
+
+        if (!eligibleOrders.length) {
+            return res.status(400).json({ success: false, message: 'No eligible history orders selected' });
+        }
+
+        const eligibleOrderIds = eligibleOrders.map((order) => order._id);
+        const orderItemIds = eligibleOrders.flatMap((order) => order.orderItems || []);
+
+        const deleteResult = await Order.deleteMany({ _id: { $in: eligibleOrderIds } });
+        if (orderItemIds.length) {
+            await OrderItem.deleteMany({ _id: { $in: orderItemIds } });
+        }
+
+        return res.json({ success: true, deletedCount: deleteResult.deletedCount || 0 });
+    } catch (error) {
+        console.error('Bulk history delete error:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 });
 

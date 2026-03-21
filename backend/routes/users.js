@@ -4,7 +4,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const { isExpoPushToken } = require('../helpers/pushNotifications');
+const { isValidPushToken } = require('../helpers/pushNotifications');
 const crypto = require('crypto');
 const { sendEmail, passwordResetCodeEmail, accountDeactivatedEmail } = require('../helpers/emailService');
 const { adminOnly } = require('../helpers/jwt');
@@ -505,8 +505,8 @@ router.post('/push-token', async (req, res) => {
         }
 
         const token = String(req.body?.token || '').trim();
-        if (!isExpoPushToken(token)) {
-            return res.status(400).json({ success: false, message: 'Invalid Expo push token' });
+        if (!isValidPushToken(token)) {
+            return res.status(400).json({ success: false, message: 'Invalid push token' });
         }
 
         await User.findByIdAndUpdate(auth.userId, {

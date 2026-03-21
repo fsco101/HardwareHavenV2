@@ -1,5 +1,9 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 const { toOrderNumber } = require('./orderNumber');
+
+const LOGO_PATH = path.resolve(__dirname, '../../frontend/assets/LOGO.png');
 
 function money(value) {
     return `P${Number(value || 0).toFixed(2)}`;
@@ -16,8 +20,16 @@ function generateReceiptPDF(order, user) {
             doc.on('error', reject);
 
             // Header
-            doc.fontSize(24).fillColor('#ff6600').text('HardwareHaven', { align: 'center' });
-            doc.fontSize(10).fillColor('#666666').text('Your trusted hardware store', { align: 'center' });
+            const headerTop = doc.y;
+            const logoExists = fs.existsSync(LOGO_PATH);
+
+            if (logoExists) {
+                doc.image(LOGO_PATH, 50, headerTop, { fit: [42, 42], align: 'left' });
+            }
+
+            doc.fontSize(24).fillColor('#ff6600').text('HardwareHaven', logoExists ? 98 : 50, headerTop, { align: 'left' });
+            doc.fontSize(10).fillColor('#666666').text('Your trusted hardware store', logoExists ? 98 : 50, headerTop + 26, { align: 'left' });
+            doc.y = Math.max(doc.y, headerTop + (logoExists ? 42 : 34));
             doc.moveDown(0.5);
             doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#cccccc');
             doc.moveDown();

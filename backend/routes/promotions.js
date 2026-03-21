@@ -6,7 +6,7 @@ const { Order } = require('../models/order');
 const { Notification } = require('../models/notification');
 const { getPHTime } = require('../helpers/phTime');
 const { adminOnly } = require('../helpers/jwt');
-const { sendExpoPushNotifications } = require('../helpers/pushNotifications');
+const { sendFirebasePushNotifications } = require('../helpers/pushNotifications');
 const router = express.Router();
 
 function getIO(req) {
@@ -25,7 +25,7 @@ async function createNotification(req, { userId, title, message, type, productId
     const user = await User.findById(userId).select('pushTokens');
     const tokens = user?.pushTokens || [];
     if (tokens.length > 0) {
-        const pushResult = await sendExpoPushNotifications(tokens, {
+        const pushResult = await sendFirebasePushNotifications(tokens, {
             title,
             body: message,
             data: {
