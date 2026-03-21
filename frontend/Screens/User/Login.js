@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, 
 import { useNavigation } from '@react-navigation/native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import FormContainer from "../../Shared/FormContainer";
 import AuthGlobal from '../../Context/Store/AuthGlobal'
 import { loginUser, firebaseLoginUser } from '../../Context/Actions/Auth.actions'
@@ -32,6 +34,17 @@ const Login = (props) => {
     const [googleLoading, setGoogleLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [deactivationAlert, setDeactivationAlert] = useState({ visible: false, message: '' })
+
+    const isNative = Platform.OS !== 'web';
+    const projectNameForProxy =
+        Constants.expoConfig?.originalFullName ||
+        (Constants.expoConfig?.owner && Constants.expoConfig?.slug
+            ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
+            : '@chunmaru/HardwareHaven');
+    const useProxy = isNative;
+    const redirectUri = isNative
+        ? 'https://auth.expo.io/@chunmaru/HardwareHaven'
+        : AuthSession.makeRedirectUri();
 
     const getLoginErrorToast = (result) => {
         const rawMessage = String(result?.message || '').toLowerCase();
@@ -63,12 +76,23 @@ const Login = (props) => {
         };
     };
 
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        expoClientId: googleAuthConfig.expoClientId,
-        androidClientId: googleAuthConfig.androidClientId,
-        iosClientId: googleAuthConfig.iosClientId,
-        webClientId: googleAuthConfig.webClientId,
-    });
+    const googleRequestConfig = {
+        // Expo Go/proxy flow must use a Web OAuth client ID tied to auth.expo.io redirect.
+        expoClientId: googleAuthConfig.expoClientId || googleAuthConfig.webClientId,
+        webClientId: googleAuthConfig.webClientId || googleAuthConfig.expoClientId,
+        // Android SDK validates this field on Android even when using proxy.
+        androidClientId:
+            googleAuthConfig.androidClientId ||
+            googleAuthConfig.expoClientId ||
+            googleAuthConfig.webClientId,
+        iosClientId: googleAuthConfig.iosClientId || googleAuthConfig.expoClientId || googleAuthConfig.webClientId,
+        redirectUri,
+        useProxy,
+        responseType: 'id_token',
+        scopes: ['openid', 'profile', 'email'],
+    };
+
+    const [request, response, promptAsync] = Google.useAuthRequest(googleRequestConfig);
 
     const showDeactivationAlert = (deactivation) => {
         const reason = String(deactivation?.reason || 'No reason provided by admin.').trim();
@@ -123,7 +147,11 @@ const Login = (props) => {
             }
 
             setGoogleLoading(true);
-            await promptAsync();
+            await promptAsync(
+                useProxy
+                    ? { useProxy: true, projectNameForProxy }
+                    : { useProxy: false }
+            );
             return;
         }
 
@@ -186,7 +214,7 @@ const Login = (props) => {
             }
 
             try {
-                const idToken = response.authentication?.idToken;
+                const idToken = response.authentication?.idToken || response.params?.id_token;
                 if (!idToken) {
                     throw new Error('Google authentication did not return an ID token.');
                 }

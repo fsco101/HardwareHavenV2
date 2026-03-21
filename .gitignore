@@ -37,6 +37,7 @@ backend/.env.*
 *secrets*
 *credentials*
 *service-account*
+frontend/google-services.json
 *.env.local
 *.local.json
 
