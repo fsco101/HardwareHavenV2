@@ -5,7 +5,8 @@ import {
     Text,
     Image,
     TouchableOpacity,
-    Modal
+    Modal,
+    Platform,
 } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from "@react-navigation/native"
@@ -226,11 +227,15 @@ const styles = StyleSheet.create({
     modalView: {
         margin: 20,
         alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5
+        ...(Platform.OS === 'web'
+            ? { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.25)' }
+            : {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3.84,
+                  elevation: 5,
+              })
     },
     textStyle: {
         color: "white",

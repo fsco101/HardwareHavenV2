@@ -9,12 +9,12 @@ import {
     FlatList,
     ActivityIndicator
 } from "react-native"
-import { Picker } from "@react-native-picker/picker"
 
 import FormContainer from "../../Shared/FormContainer"
 import Input from "../../Shared/Input"
 import EasyButton from "../../Shared/StyledComponents/EasyButton"
 import Error from "../../Shared/Error"
+import CustomDropdown from '../../Shared/CustomDropdown';
 
 import Toast from '../../Shared/SnackbarService';
 import baseURL from "../../config/api"
@@ -33,7 +33,6 @@ import { createProduct, updateProduct } from '../../Redux/Actions/productActions
 const ProductForm = (props) => {
     const colors = useTheme();
     const { fs, ms, spacing, ws } = useResponsive();
-    const [pickerValue, setPickerValue] = useState('');
     const [brand, setBrand] = useState('');
     const [name, setName] = useState('');
     const [price, setPrice] = useState(0);
@@ -78,7 +77,6 @@ const ProductForm = (props) => {
             setMainImage(fallbackImage || '');
             setImage(fallbackImage || '');
             setCategory(resolvedCategory);
-            setPickerValue(resolvedCategory);
             setCountInStock(incomingItem?.countInStock != null ? incomingItem.countInStock.toString() : '');
             if (incomingItem?.images) {
                 setGalleryImages(incomingItem.images);
@@ -245,6 +243,7 @@ const ProductForm = (props) => {
     }
 
     return (
+        <View style={[styles.screen, { backgroundColor: colors.background }]}> 
         <FormContainer title={item !== null ? "Edit Product" : "Add Product"}>
             <View style={[styles.imageContainer, { borderColor: colors.border, width: 140, height: 140, borderRadius: 70 }]}>
                 {resolvedMainImage ? (
@@ -337,18 +336,20 @@ const ProductForm = (props) => {
                 onChangeText={(text) => { setDescription(text); clearFieldError('description'); }} />
             {fieldErrors.description ? <Error message={fieldErrors.description} /> : null}
 
-            <View style={[styles.pickerContainer, { backgroundColor: colors.inputBg, borderColor: fieldErrors.category ? colors.danger : colors.border }]}>
-                <Picker
-                    style={{ height: 50, width: '100%', color: colors.text }}
-                    selectedValue={pickerValue}
-                    onValueChange={(e) => { setPickerValue(e); setCategory(e); clearFieldError('category'); }}
-                    dropdownIconColor={colors.primary}
-                >
-                    <Picker.Item label="Select Category" value="" color={colors.textSecondary} />
-                    {categories.map((c, index) => (
-                        <Picker.Item key={c.id} label={c.name} value={c.id} />
-                    ))}
-                </Picker>
+            <View style={[styles.dropdownContainer, { marginVertical: 10 }]}> 
+                <CustomDropdown
+                    label="Category"
+                    data={categories.map((c) => ({
+                        label: c.name,
+                        value: c.id || c._id,
+                    }))}
+                    value={category}
+                    onSelect={(value) => { setCategory(value); clearFieldError('category'); }}
+                    placeholder="Select Category"
+                    icon="list-outline"
+                    searchable={true}
+                    error={!!fieldErrors.category}
+                />
             </View>
             {fieldErrors.category ? <Error message={fieldErrors.category} /> : null}
 
@@ -362,11 +363,15 @@ const ProductForm = (props) => {
                 </EasyButton>
             </View>
         </FormContainer>
+        </View>
     )
 }
 
 
 const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+    },
     label: {
         width: "80%",
         marginTop: 10
@@ -404,12 +409,8 @@ const styles = StyleSheet.create({
         borderRadius: 100,
         elevation: 20
     },
-    pickerContainer: {
+    dropdownContainer: {
         width: '80%',
-        borderWidth: 1,
-        borderRadius: 12,
-        marginVertical: 10,
-        overflow: 'hidden',
     },
     sectionHeader: {
         flexDirection: 'row',

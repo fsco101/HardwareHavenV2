@@ -4,16 +4,14 @@ import { createStackNavigator } from "@react-navigation/stack"
 import Cart from '../Screens/Cart/Cart';
 import CheckoutNavigator from './CheckoutNavigator';
 import { darkColors } from '../Theme/theme';
+import { buildStackHeaderOptions } from './stackHeaderOptions';
 
 const Stack = createStackNavigator();
 
 function MyStack() {
     return(
         <Stack.Navigator
-            screenOptions={{
-                headerStyle: { backgroundColor: darkColors.headerBg },
-                headerTintColor: darkColors.text,
-            }}
+            screenOptions={buildStackHeaderOptions(darkColors)}
         >
             <Stack.Screen 
                 name="Cart"

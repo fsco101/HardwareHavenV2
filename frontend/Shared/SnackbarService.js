@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Snackbar } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -158,11 +158,15 @@ const styles = StyleSheet.create({
     },
     snackbar: {
         borderRadius: 14,
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 8,
+        ...(Platform.OS === 'web'
+            ? { boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.22)' }
+            : {
+                  elevation: 8,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.22,
+                  shadowRadius: 8,
+              }),
     },
     contentRow: {
         flexDirection: 'row',

@@ -3,16 +3,13 @@ import { createStackNavigator } from "@react-navigation/stack"
 import ProductContainer from '../Screens/Product/ProductContainer';
 import SingleProduct from '../Screens/Product/SingleProduct';
 import { darkColors } from '../Theme/theme';
+import { buildStackHeaderOptions } from './stackHeaderOptions';
 
 const Stack = createStackNavigator()
 function MyStack() {
     return (
         <Stack.Navigator
-            screenOptions={{
-                headerStyle: { backgroundColor: darkColors.headerBg },
-                headerTintColor: darkColors.text,
-                headerTitleStyle: { color: darkColors.text },
-            }}
+            screenOptions={buildStackHeaderOptions(darkColors)}
         >
             <Stack.Screen
                 name='Main'

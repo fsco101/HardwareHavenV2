@@ -10,6 +10,7 @@ import SweetAlert from '../../Shared/SweetAlert';
 import { useDispatch, useSelector } from 'react-redux';
 import { cancelOrder, confirmOrderDelivery, fetchMyOrders } from '../../Redux/Actions/orderActions';
 import { getToken } from '../../assets/common/tokenStorage';
+import { formatOrderNumber } from '../../assets/common/orderNumber';
 
 const CANCEL_REASONS = [
     'Changed my mind',
@@ -165,7 +166,7 @@ const UserOrders = () => {
             <View style={[styles.orderCard, { backgroundColor: colors.cardBg, borderLeftColor: getStatusColor(item.status), padding: spacing.md, margin: spacing.sm }]}>
                 <View style={styles.orderHeader}>
                     <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(14) }}>
-                        Order #{(item._id || item.id).slice(-8)}
+                        Order #{formatOrderNumber(item)}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name={getStatusIcon(item.status)} size={16} color={getStatusColor(item.status)} />

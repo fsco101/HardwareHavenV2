@@ -10,17 +10,14 @@ import Promotions from "../Screens/Admin/Promotions"
 import UserManagement from "../Screens/Admin/UserManagement"
 import ReviewManagement from "../Screens/Admin/ReviewManagement"
 import { darkColors } from '../Theme/theme';
+import { buildStackHeaderOptions } from './stackHeaderOptions';
 
 const Stack = createStackNavigator();
 
 const AdminNavigator = () => {
     return (
         <Stack.Navigator
-            screenOptions={{
-                headerStyle: { backgroundColor: darkColors.headerBg },
-                headerTintColor: darkColors.text,
-                headerTitleStyle: { color: darkColors.text },
-            }}
+            screenOptions={buildStackHeaderOptions(darkColors)}
         >
             <Stack.Screen
                 name="Dashboard"

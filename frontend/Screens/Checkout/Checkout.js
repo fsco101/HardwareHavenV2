@@ -135,10 +135,8 @@ const Checkout = (props) => {
 
                 applyProfileToForm(profile);
             } catch (err) {
-                // If no cache was loaded, stop spinner even when API is slow/fails
-                if (isMounted && loading) {
-                    setLoading(false);
-                }
+                // Stop spinner even when API is slow/fails.
+                if (isMounted) setLoading(false);
                 console.log(err?.message || err);
             } finally {
                 if (isMounted) setLoading(false);
@@ -149,11 +147,21 @@ const Checkout = (props) => {
 
         return () => {
             isMounted = false;
-            setOrderItems();
         }
     }, [cartItems, context.stateUser.isAuthenticated, context.stateUser.user?.userId])
 
     const checkOut = () => {
+        if (!user) {
+            Toast.show({
+                topOffset: 60,
+                type: 'error',
+                text1: 'Please login again',
+                text2: 'Unable to resolve your account for this order.',
+            });
+            navigation.navigate('User', { screen: 'Login' });
+            return;
+        }
+
         if (!orderItems || orderItems.length === 0) {
             Toast.show({
                 topOffset: 60,
@@ -229,7 +237,7 @@ const Checkout = (props) => {
             <FormContainer title={"Shipping Address"}>
                 <View style={[styles.qtyCard, { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md, width: '80%' }]}> 
                     <Text style={{ color: colors.primary, fontWeight: '700', fontSize: fs(14), marginBottom: spacing.sm }}>Order Quantity</Text>
-                    {orderItems.map((item) => (
+                    {(orderItems || []).map((item) => (
                         <View key={item._id || item.id} style={[styles.qtyRow, { borderBottomColor: colors.border }]}> 
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <Text style={{ color: colors.text, fontSize: fs(13), fontWeight: '600' }} numberOfLines={1}>{item.name}</Text>

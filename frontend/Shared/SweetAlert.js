@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Modal, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../Theme/theme';
 import { useResponsive } from '../assets/common/responsive';
@@ -104,11 +104,15 @@ const styles = StyleSheet.create({
         maxWidth: 400,
         alignItems: 'center',
         borderWidth: 1,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        ...(Platform.OS === 'web'
+            ? { boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)' }
+            : {
+                  elevation: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+              }),
         overflow: 'hidden',
     },
     topBar: {

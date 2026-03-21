@@ -13,14 +13,20 @@ const methods = [
 ]
 
 const Payment = ({ route }) => {
-  const incomingOrder = route?.params?.order || route?.params || null;
+  const incomingOrder = route?.params?.order || null;
   const [selected, setSelected] = useState('');
   const navigation = useNavigation()
   const colors = useTheme();
   const { fs, ms, spacing, ws } = useResponsive();
 
+  const hasValidOrder =
+    !!incomingOrder &&
+    Array.isArray(incomingOrder.orderItems) &&
+    incomingOrder.orderItems.length > 0 &&
+    !!incomingOrder.user;
+
   const handleContinue = () => {
-    if (!incomingOrder) {
+    if (!hasValidOrder) {
       Toast.show({
         topOffset: 60,
         type: "error",
@@ -42,6 +48,10 @@ const Payment = ({ route }) => {
     // Attach payment method to order
     const orderWithPayment = {
       ...incomingOrder,
+      orderItems: incomingOrder.orderItems.map((item) => ({
+        ...item,
+        quantity: Math.max(1, Number(item.quantity || 1)),
+      })),
       paymentMethod: selected,
     };
     navigation.navigate("Confirm", { order: orderWithPayment });
@@ -97,6 +107,12 @@ const Payment = ({ route }) => {
         <Text style={{ color: selected ? colors.textOnPrimary : colors.textSecondary, fontWeight: 'bold', fontSize: fs(16) }}>Continue</Text>
         <Ionicons name="arrow-forward" size={ms(20, 0.3)} color={selected ? colors.textOnPrimary : colors.textSecondary} style={{ marginLeft: spacing.sm }} />
       </TouchableOpacity>
+
+      {!hasValidOrder && (
+        <Text style={{ color: colors.warning, marginTop: spacing.md, fontSize: fs(12), textAlign: 'center' }}>
+          Checkout data not found. Return to Shipping and tap Continue again.
+        </Text>
+      )}
     </View>
   )
 }

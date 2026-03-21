@@ -26,17 +26,33 @@ const Confirm = (props) => {
     const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
     const { fs, ms, spacing, ws } = useResponsive();
 
-    // Support both legacy nested payload and normalized payload.
-    const order = routeParams?.order?.order || routeParams?.order || null;
+    const order = routeParams?.order || null;
     const paymentMethod = order?.paymentMethod || 'COD';
 
+    const normalizedOrderItems = Array.isArray(order?.orderItems)
+        ? order.orderItems
+            .map((item) => ({
+                ...item,
+                quantity: Math.max(1, Number(item?.quantity || 1)),
+                productId: item?._id || item?.id || item?.product || '',
+            }))
+            .filter((item) => !!item.productId)
+        : [];
+
+    const hasValidOrder =
+        !!order &&
+        !!order.user &&
+        !!order.phone &&
+        !!order.shippingAddress1 &&
+        normalizedOrderItems.length > 0;
+
     const confirmOrder = async () => {
-        if (!order || !Array.isArray(order.orderItems) || order.orderItems.length === 0) {
+        if (!hasValidOrder) {
             Toast.show({
                 topOffset: 60,
                 type: "error",
                 text1: "No order to confirm",
-                text2: "Please complete Shipping and Payment first.",
+                text2: "Missing checkout details. Please complete Shipping and Payment first.",
             });
             navigation.navigate('Shipping');
             return;
@@ -52,9 +68,9 @@ const Confirm = (props) => {
             }
             // Build order payload
             const orderPayload = {
-                orderItems: order.orderItems.map(item => ({
-                    quantity: item.quantity || 1,
-                    product: item._id || item.id || item.product,
+                orderItems: normalizedOrderItems.map(item => ({
+                    quantity: item.quantity,
+                    product: item.productId,
                 })),
                 shippingAddress1: order.shippingAddress1,
                 shippingAddress2: order.shippingAddress2 || '',
@@ -95,7 +111,7 @@ const Confirm = (props) => {
                 throw new Error(result.message || 'Please try again');
             }
         } catch (error) {
-            const message = error.response?.data?.message || "Please try again";
+            const message = error.response?.data?.message || error.message || "Please try again";
             Toast.show({
                 topOffset: 60,
                 type: "error",
@@ -108,7 +124,7 @@ const Confirm = (props) => {
     }
 
     // Calculate total
-    const total = (order?.orderItems || []).reduce((sum, item) => {
+    const total = normalizedOrderItems.reduce((sum, item) => {
         const unitPrice = Number(item.effectivePrice ?? item.price ?? 0);
         return sum + unitPrice * (item.quantity || 1);
     }, 0);
@@ -130,7 +146,7 @@ const Confirm = (props) => {
             <ScrollView contentContainerStyle={[styles.scrollContent, { padding: spacing.lg, paddingBottom: spacing.xl }]}>
                 <Ionicons name="receipt-outline" size={ms(40, 0.3)} color={colors.primary} style={{ marginBottom: spacing.md }} />
                 <Text style={[styles.heading, { color: colors.text, fontSize: fs(24), marginBottom: spacing.lg }]}>Confirm Order</Text>
-                {order ? (
+                {hasValidOrder ? (
                     <View style={[styles.orderCard, { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.md, borderRadius: ws(12), marginBottom: spacing.lg }]}>
                         <Text style={[styles.sectionTitle, { color: colors.primary, fontSize: fs(16), marginBottom: spacing.sm + 2 }]}>Shipping To</Text>
                         <View style={styles.detailRow}>
@@ -157,7 +173,7 @@ const Confirm = (props) => {
                         </View>
 
                         <Text style={[styles.sectionTitle, { color: colors.primary, marginTop: spacing.md, fontSize: fs(16), marginBottom: spacing.sm + 2 }]}>Items</Text>
-                        {order.orderItems.map((item, index) => (
+                        {normalizedOrderItems.map((item, index) => (
                             <View key={item.id || item._id || index} style={[styles.itemRow, { borderBottomColor: colors.border, paddingVertical: spacing.sm }]}>
                                 <Avatar.Image size={ms(40, 0.3)} source={{
                                     uri: cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '') || fallbackImage
@@ -208,7 +224,7 @@ const Confirm = (props) => {
                     }]}
                     onPress={confirmOrder}
                     activeOpacity={0.7}
-                    disabled={loading || !order}
+                    disabled={loading || !hasValidOrder}
                 >
                     {loading ? (
                         <ActivityIndicator color={colors.textOnPrimary} size="small" />

@@ -33,6 +33,36 @@ const Login = (props) => {
     const [showPassword, setShowPassword] = useState(false)
     const [deactivationAlert, setDeactivationAlert] = useState({ visible: false, message: '' })
 
+    const getLoginErrorToast = (result) => {
+        const rawMessage = String(result?.message || '').toLowerCase();
+
+        if (rawMessage.includes('password is wrong')) {
+            return {
+                text1: 'Incorrect password',
+                text2: 'Double-check your password and try again.',
+            };
+        }
+
+        if (rawMessage.includes('user not found') || rawMessage.includes('the user not found')) {
+            return {
+                text1: 'Account not found',
+                text2: 'No account matches this email address.',
+            };
+        }
+
+        if (rawMessage.includes('network')) {
+            return {
+                text1: 'Network issue',
+                text2: 'Check your connection, then try again.',
+            };
+        }
+
+        return {
+            text1: 'Login failed',
+            text2: result?.message || 'Please check your credentials and try again.',
+        };
+    };
+
     const [request, response, promptAsync] = Google.useAuthRequest({
         expoClientId: googleAuthConfig.expoClientId,
         androidClientId: googleAuthConfig.androidClientId,
@@ -69,10 +99,13 @@ const Login = (props) => {
                 return;
             }
 
+            const toast = getLoginErrorToast(result);
+
             Toast.show({
                 topOffset: 60,
                 type: 'error',
-                text1: result?.message || 'Please provide correct credentials',
+                text1: toast.text1,
+                text2: toast.text2,
             });
         }
     };
@@ -83,7 +116,8 @@ const Login = (props) => {
                 Toast.show({
                     topOffset: 60,
                     type: 'error',
-                    text1: 'Google Sign-In is not configured yet',
+                    text1: 'Google Sign-In unavailable',
+                    text2: 'Google client IDs are missing or invalid in app configuration.',
                 });
                 return;
             }
@@ -115,7 +149,8 @@ const Login = (props) => {
                 Toast.show({
                     topOffset: 60,
                     type: 'error',
-                    text1: loginResult?.message || 'Google sign-in failed',
+                    text1: 'Google login failed',
+                    text2: loginResult?.message || 'Please try again or use email/password login.',
                 });
             }
         } catch (err) {
@@ -129,7 +164,8 @@ const Login = (props) => {
             Toast.show({
                 topOffset: 60,
                 type: "error",
-                text1: message,
+                text1: 'Google login failed',
+                text2: message,
             });
         } finally {
             setGoogleLoading(false);
@@ -175,14 +211,16 @@ const Login = (props) => {
                     Toast.show({
                         topOffset: 60,
                         type: 'error',
-                        text1: loginResult?.message || 'Google sign-in failed',
+                        text1: 'Google login failed',
+                        text2: loginResult?.message || 'Please try again or use email/password login.',
                     });
                 }
             } catch (err) {
                 Toast.show({
                     topOffset: 60,
                     type: 'error',
-                    text1: err?.message || 'Google sign-in failed',
+                    text1: 'Google login failed',
+                    text2: err?.message || 'Please try again.',
                 });
             } finally {
                 setGoogleLoading(false);

@@ -7,6 +7,7 @@ import {
     StyleSheet,
     Modal,
     TouchableOpacity,
+    Platform,
 } from "react-native"
 import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import baseURL from "../../config/api";
@@ -230,11 +231,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
     },
     item: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
-        elevation: 1,
+        ...(Platform.OS === 'web'
+            ? { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)' }
+            : {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 1,
+                  elevation: 1,
+              }),
         padding: 12,
         margin: 5,
         flexDirection: "row",

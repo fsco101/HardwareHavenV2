@@ -31,6 +31,15 @@ const STATUS_FILTERS = [
     { label: 'Inactive', value: 'inactive' },
 ];
 
+const COMMON_DEACTIVATION_REASONS = [
+    { label: 'Violation of community guidelines', value: 'Violation of community guidelines' },
+    { label: 'Suspicious or fraudulent activity', value: 'Suspicious or fraudulent activity' },
+    { label: 'Repeated failed verification checks', value: 'Repeated failed verification checks' },
+    { label: 'Abusive behavior reported', value: 'Abusive behavior reported' },
+    { label: 'Requested by account owner', value: 'Requested by account owner' },
+    { label: 'Other (enter custom reason)', value: 'OTHER' },
+];
+
 const UserManagement = () => {
     const colors = useTheme();
     const { fs, spacing, ws } = useResponsive();
@@ -43,6 +52,7 @@ const UserManagement = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [busyMap, setBusyMap] = useState({});
     const [deactivateModalVisible, setDeactivateModalVisible] = useState(false);
+    const [selectedDeactivationReason, setSelectedDeactivationReason] = useState('');
     const [deactivationReason, setDeactivationReason] = useState('');
     const [deactivateTargetUser, setDeactivateTargetUser] = useState(null);
 
@@ -162,6 +172,7 @@ const UserManagement = () => {
         const nextStatus = !user?.isActive;
         if (!nextStatus) {
             setDeactivateTargetUser(user);
+            setSelectedDeactivationReason('');
             setDeactivationReason('');
             setDeactivateModalVisible(true);
             return;
@@ -171,12 +182,16 @@ const UserManagement = () => {
     };
 
     const confirmDeactivate = async () => {
-        const reason = deactivationReason.trim();
+        const customReason = deactivationReason.trim();
+        const reason = selectedDeactivationReason === 'OTHER'
+            ? customReason
+            : String(selectedDeactivationReason || '').trim();
+
         if (!reason) {
             Toast.show({
                 topOffset: 60,
                 type: 'error',
-                text1: 'Deactivation reason is required',
+                text1: 'Select a common reason first',
             });
             return;
         }
@@ -184,6 +199,7 @@ const UserManagement = () => {
         const target = deactivateTargetUser;
         setDeactivateModalVisible(false);
         setDeactivateTargetUser(null);
+        setSelectedDeactivationReason('');
         setDeactivationReason('');
 
         if (target) {
@@ -276,25 +292,38 @@ const UserManagement = () => {
                     <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
                         <Text style={{ color: colors.text, fontSize: fs(16), fontWeight: '700' }}>Deactivate User</Text>
                         <Text style={{ color: colors.textSecondary, fontSize: fs(12), marginTop: 6 }}>
-                            Provide the reason shown to the user on login.
+                            This reason will be shown on login and sent to the user's email.
                         </Text>
 
-                        <TextInput
-                            style={[
-                                styles.reasonInput,
-                                {
-                                    backgroundColor: colors.inputBg,
-                                    borderColor: colors.border,
-                                    color: colors.text,
-                                    fontSize: fs(13),
-                                },
-                            ]}
-                            multiline
-                            placeholder="Reason for deactivation"
-                            placeholderTextColor={colors.textSecondary}
-                            value={deactivationReason}
-                            onChangeText={setDeactivationReason}
-                        />
+                        <View style={{ marginTop: 10 }}>
+                            <CustomDropdown
+                                label="Common reason"
+                                data={COMMON_DEACTIVATION_REASONS}
+                                value={selectedDeactivationReason}
+                                onSelect={setSelectedDeactivationReason}
+                                placeholder="Select deactivation reason"
+                                icon="alert-circle-outline"
+                            />
+                        </View>
+
+                        {selectedDeactivationReason === 'OTHER' ? (
+                            <TextInput
+                                style={[
+                                    styles.reasonInput,
+                                    {
+                                        backgroundColor: colors.inputBg,
+                                        borderColor: colors.border,
+                                        color: colors.text,
+                                        fontSize: fs(13),
+                                    },
+                                ]}
+                                multiline
+                                placeholder="Enter custom reason"
+                                placeholderTextColor={colors.textSecondary}
+                                value={deactivationReason}
+                                onChangeText={setDeactivationReason}
+                            />
+                        ) : null}
 
                         <View style={styles.modalActions}>
                             <TouchableOpacity
@@ -302,6 +331,7 @@ const UserManagement = () => {
                                 onPress={() => {
                                     setDeactivateModalVisible(false);
                                     setDeactivateTargetUser(null);
+                                    setSelectedDeactivationReason('');
                                     setDeactivationReason('');
                                 }}
                             >

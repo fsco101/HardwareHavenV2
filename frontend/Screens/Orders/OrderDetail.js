@@ -6,6 +6,7 @@ import axios from 'axios';
 import baseURL from '../../config/api';
 import { useTheme } from '../../Theme/theme';
 import { useResponsive } from '../../assets/common/responsive';
+import { formatOrderNumber } from '../../assets/common/orderNumber';
 
 const OrderDetail = () => {
     const route = useRoute();
@@ -73,7 +74,7 @@ const OrderDetail = () => {
         <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.md }}>
             <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}> 
                 <Text style={{ color: colors.text, fontSize: fs(17), fontWeight: 'bold' }}>
-                    Order #{(order._id || order.id || '').slice(-8)}
+                    Order #{formatOrderNumber(order)}
                 </Text>
                 <Text style={{ color: getStatusColor(order.status), fontWeight: '700', marginTop: spacing.xs }}>
                     Status: {order.status}

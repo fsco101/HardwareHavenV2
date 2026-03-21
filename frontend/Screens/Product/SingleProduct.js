@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Image, View, StyleSheet, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from "react-native";
+import { Animated, Image, View, StyleSheet, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from "react-native";
 import { useTheme } from '../../Theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { addToCart } from '../../Redux/Actions/cartActions'
@@ -39,14 +39,38 @@ const SingleProduct = ({ route }) => {
     const cartItems = useSelector((state) => state.cartItems);
     const { getPromoForProduct } = usePromotions();
 
+    const [quantity, setQuantity] = useState(1);
+    const [quantityText, setQuantityText] = useState('1');
+
     const promo = getPromoForProduct(item._id || item.id);
     const displayPrice = promo ? promo.discountedPrice : item.price;
+    const unitPrice = Number(displayPrice || 0);
+    const totalPrice = Math.max(0, unitPrice * quantity);
+    const formatMoney = (value) => Number(value || 0).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
     const cleanUri = (value) => {
         const uri = String(value || '').trim();
         return uri ? uri : '';
     };
-    const imageUri = cleanUri(item?.image) || cleanUri(Array.isArray(item?.images) ? item.images[0] : '');
+    const imageUris = Array.from(new Set([
+        cleanUri(item?.image),
+        ...(Array.isArray(item?.images) ? item.images.map((img) => cleanUri(img)) : []),
+    ].filter(Boolean)));
     const fallbackImage = 'https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png';
+    const [imageIndex, setImageIndex] = useState(0);
+    const imageFade = useState(new Animated.Value(1))[0];
+
+    const switchImage = (nextIndex) => {
+        if (imageUris.length <= 1) return;
+        const safeIndex = (nextIndex + imageUris.length) % imageUris.length;
+        Animated.sequence([
+            Animated.timing(imageFade, { toValue: 0, duration: 220, useNativeDriver: true }),
+            Animated.timing(imageFade, { toValue: 1, duration: 320, useNativeDriver: true }),
+        ]).start();
+        setImageIndex(safeIndex);
+    };
 
     // Reviews state
     const { reviews, error: reviewError } = useSelector((state) => state.reviews);
@@ -54,14 +78,24 @@ const SingleProduct = ({ route }) => {
     const [myComment, setMyComment] = useState('');
     const [editingReview, setEditingReview] = useState(null);
     const [submitting, setSubmitting] = useState(false);
-    const [quantity, setQuantity] = useState(1);
-    const [quantityText, setQuantityText] = useState('1');
 
     useEffect(() => {
         if (item && item._id) {
             dispatch(fetchReviews(item._id));
         }
     }, [item]);
+
+    useEffect(() => {
+        setImageIndex(0);
+    }, [item?._id]);
+
+    useEffect(() => {
+        if (imageUris.length <= 1) return undefined;
+        const interval = setInterval(() => {
+            switchImage(imageIndex + 1);
+        }, 4200);
+        return () => clearInterval(interval);
+    }, [imageIndex, imageUris.length]);
 
     // Check if user already has a review
     const myExistingReview = reviews.find((r) => r.user && r.user._id === userId);
@@ -145,19 +179,103 @@ const SingleProduct = ({ route }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ScrollView style={{ marginBottom: ws(80), padding: spacing.xs }}>
-                <View style={[styles.imageContainer, { backgroundColor: colors.surface, borderRadius: ws(12), padding: spacing.sm, margin: spacing.sm }]}>
-                    <Image
+            <ScrollView style={{ padding: spacing.xs }} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+                <View style={[styles.imageContainer, {
+                    backgroundColor: colors.surface,
+                    borderRadius: ws(14),
+                    padding: spacing.sm,
+                    margin: spacing.sm,
+                    borderColor: colors.border,
+                }]}> 
+                    <Animated.Image
                         source={{
-                            uri: imageUri || fallbackImage
+                            uri: imageUris[imageIndex] || fallbackImage
                         }}
                         resizeMode="contain"
-                        style={[styles.image, { height: hp(30) }]}
+                        style={[styles.image, { height: hp(30), opacity: imageFade }]}
                     />
+                    {imageUris.length > 1 ? (
+                        <>
+                            <View style={[styles.imageCountPill, { backgroundColor: colors.overlay, borderColor: colors.border }]}> 
+                                <Text style={{ color: colors.textOnPrimary, fontSize: fs(11), fontWeight: '700' }}>
+                                    {imageIndex + 1}/{imageUris.length}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.sliderNav, { left: spacing.sm, backgroundColor: colors.overlay, borderColor: colors.border }]}
+                                onPress={() => switchImage(imageIndex - 1)}
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons name="chevron-back" size={ms(18, 0.2)} color={colors.textOnPrimary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.sliderNav, { right: spacing.sm, backgroundColor: colors.overlay, borderColor: colors.border }]}
+                                onPress={() => switchImage(imageIndex + 1)}
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons name="chevron-forward" size={ms(18, 0.2)} color={colors.textOnPrimary} />
+                            </TouchableOpacity>
+                            <View style={styles.sliderDots}>
+                                {imageUris.map((img, idx) => (
+                                    <TouchableOpacity
+                                        key={`${item._id || item.id}-image-${idx}-${img}`}
+                                        onPress={() => switchImage(idx)}
+                                        activeOpacity={0.8}
+                                        style={[
+                                            styles.sliderDot,
+                                            {
+                                                backgroundColor: idx === imageIndex ? colors.primary : colors.textSecondary,
+                                                opacity: idx === imageIndex ? 1 : 0.45,
+                                                width: idx === imageIndex ? 18 : 8,
+                                            },
+                                        ]}
+                                    />
+                                ))}
+                            </View>
+                        </>
+                    ) : null}
                 </View>
+                <View style={[styles.heroInfoCard, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.md }]}> 
+                    <View style={styles.heroTopRow}>
+                        <View style={[styles.brandPill, { backgroundColor: colors.surfaceLight, borderColor: colors.border }]}> 
+                            <Ionicons name="pricetag-outline" size={12} color={colors.secondary} />
+                            <Text style={{ color: colors.secondary, fontSize: fs(11), marginLeft: 5, fontWeight: '700' }}>{item.brand || 'HardwareHaven'}</Text>
+                        </View>
+                        <View style={[styles.stockPill, { backgroundColor: item.countInStock > 0 ? colors.success : colors.danger }]}> 
+                            <Text style={{ color: colors.textOnPrimary, fontSize: fs(10), fontWeight: '700' }}>
+                                {item.countInStock > 0 ? 'In stock' : 'Out of stock'}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={[styles.contentHeader, { color: colors.text, fontSize: fs(23), marginBottom: spacing.xs + 2 }]}>{item.name}</Text>
+                    <View style={styles.ratingInlineRow}>
+                        <StarRating rating={Number(item.rating || 0)} size={14} />
+                        <Text style={{ color: colors.textSecondary, fontSize: fs(12), marginLeft: 6 }}>
+                            {Number(item.rating || 0).toFixed(1)} ({item.numReviews || reviews.length || 0} reviews)
+                        </Text>
+                    </View>
+                </View>
+                {imageUris.length > 1 ? (
+                    <View style={[styles.thumbRow, { paddingHorizontal: spacing.md }]}> 
+                        {imageUris.map((img, idx) => (
+                            <TouchableOpacity
+                                key={`${item._id || item.id}-thumb-${idx}-${img}`}
+                                style={[
+                                    styles.thumb,
+                                    {
+                                        borderColor: idx === imageIndex ? colors.primary : colors.border,
+                                        backgroundColor: colors.surface,
+                                    },
+                                ]}
+                                onPress={() => switchImage(idx)}
+                                activeOpacity={0.8}
+                            >
+                                <Image source={{ uri: img }} style={styles.thumbImage} resizeMode="cover" />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                ) : null}
                 <View style={[styles.contentContainer, { paddingHorizontal: spacing.md }]}>
-                    <Text style={[styles.contentHeader, { color: colors.text, fontSize: fs(22) }]}>{item.name}</Text>
-                    <Text style={[styles.contentText, { color: colors.secondary, fontSize: fs(16) }]}>{item.brand}</Text>
                     {promo ? (
                         <View style={{ alignItems: 'center' }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -171,7 +289,10 @@ const SingleProduct = ({ route }) => {
                     )}
                 </View>
                 <View style={[styles.descriptionContainer, { backgroundColor: colors.surface, borderColor: colors.border, margin: spacing.md, padding: spacing.md, borderRadius: ws(12) }]}>
-                    <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.sm, fontSize: fs(14) }}>Description</Text>
+                    <View style={styles.sectionTitleRow}>
+                        <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+                        <Text style={{ color: colors.textSecondary, fontWeight: '700', marginLeft: 6, fontSize: fs(13) }}>Description</Text>
+                    </View>
                     <Text style={{ color: colors.text, lineHeight: fs(22), fontSize: fs(14) }}>{item.description}</Text>
                 </View>
                 <View style={[styles.stockRow, { marginHorizontal: spacing.md, marginBottom: spacing.md }]}>
@@ -183,6 +304,88 @@ const SingleProduct = ({ route }) => {
                     <Text style={{ color: item.countInStock > 0 ? colors.success : colors.danger, marginLeft: spacing.xs, fontSize: fs(14) }}>
                         {item.countInStock > 0 ? `${item.countInStock} In Stock` : 'Out of Stock'}
                     </Text>
+                </View>
+
+                <View style={[styles.purchaseCard, { backgroundColor: colors.surface, borderColor: colors.border, margin: spacing.md }]}> 
+                    <Text style={{ color: colors.textSecondary, fontSize: fs(12), fontWeight: '700' }}>Purchase</Text>
+                    <View style={[styles.purchaseRow, { marginTop: spacing.sm }]}> 
+                        <View>
+                            <Text style={{ color: colors.textSecondary, fontSize: fs(11), marginBottom: 4 }}>Unit price: ₱{formatMoney(unitPrice)}</Text>
+                            <Text style={[styles.price, { color: colors.accent, fontSize: fs(24) }]}>₱{formatMoney(totalPrice)}</Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: fs(11), marginTop: 2 }}>Total for {quantity} item{quantity > 1 ? 's' : ''}</Text>
+                        </View>
+                        {item.countInStock > 0 ? (
+                            <View style={styles.bottomRightWrap}>
+                                <View style={[styles.qtyRow, { marginBottom: spacing.xs }]}> 
+                                    <TouchableOpacity
+                                        style={[styles.qtyBtn, { backgroundColor: colors.surfaceLight, opacity: quantity <= 1 ? 0.5 : 1 }]}
+                                        onPress={decreaseQty}
+                                        disabled={quantity <= 1}
+                                    >
+                                        <Ionicons name="remove" size={ms(16, 0.2)} color={colors.text} />
+                                    </TouchableOpacity>
+                                    <TextInput
+                                        style={[styles.qtyInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                                        keyboardType="numeric"
+                                        value={quantityText}
+                                        onChangeText={handleQuantityInput}
+                                        onBlur={handleQuantityBlur}
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.qtyBtn, {
+                                            backgroundColor: colors.surfaceLight,
+                                            opacity: quantity >= Number(item.countInStock || 0) ? 0.5 : 1,
+                                        }]}
+                                        onPress={increaseQty}
+                                        disabled={quantity >= Number(item.countInStock || 0)}
+                                    >
+                                        <Ionicons name="add" size={ms(16, 0.2)} color={colors.text} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.addToCartBtn, {
+                                        backgroundColor: colors.primary,
+                                        paddingVertical: spacing.sm + 4,
+                                        paddingHorizontal: spacing.lg,
+                                        borderRadius: ws(10),
+                                        borderColor: colors.primaryDark,
+                                    }]}
+                                    onPress={() => {
+                                        const existingCartItem = cartItems.find(ci => (ci._id || ci.id) === (item._id || item.id));
+                                        const currentQtyInCart = existingCartItem ? (existingCartItem.quantity || 1) : 0;
+                                        if ((currentQtyInCart + quantity) > item.countInStock) {
+                                            Toast.show({
+                                                topOffset: 60,
+                                                type: "error",
+                                                text1: "Stock limit reached",
+                                                text2: `Only ${item.countInStock} available for "${item.name}"`
+                                            });
+                                            return;
+                                        }
+                                        dispatch(addToCart({
+                                            ...item,
+                                            quantity,
+                                            effectivePrice: displayPrice,
+                                            originalPrice: item.price,
+                                        }));
+                                        Toast.show({
+                                            topOffset: 60,
+                                            type: "success",
+                                            text1: `${item.name} added to Cart`,
+                                            text2: `Quantity: ${quantity}`
+                                        });
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="cart" size={ms(20, 0.3)} color={colors.textOnPrimary} />
+                                    <Text style={{ color: colors.textOnPrimary, fontWeight: 'bold', marginLeft: spacing.sm, fontSize: fs(15) }}>Add ₱{formatMoney(totalPrice)}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <Text style={{ color: colors.danger, fontSize: fs(13), fontWeight: '700' }}>Currently unavailable</Text>
+                        )}
+                    </View>
                 </View>
 
                 {/* Reviews Section */}
@@ -275,77 +478,6 @@ const SingleProduct = ({ route }) => {
                     )}
                 </View>
             </ScrollView>
-            <View style={[styles.bottomContainer, { backgroundColor: colors.surface, borderTopColor: colors.border, padding: spacing.md }]}> 
-                <Text style={[styles.price, { color: colors.accent, fontSize: fs(24) }]}>₱{displayPrice}</Text>
-                {item.countInStock > 0 ? (
-                    <View style={styles.bottomRightWrap}>
-                        <View style={[styles.qtyRow, { marginBottom: spacing.xs }]}> 
-                            <TouchableOpacity
-                                style={[styles.qtyBtn, { backgroundColor: colors.surfaceLight, opacity: quantity <= 1 ? 0.5 : 1 }]}
-                                onPress={decreaseQty}
-                                disabled={quantity <= 1}
-                            >
-                                <Ionicons name="remove" size={ms(16, 0.2)} color={colors.text} />
-                            </TouchableOpacity>
-                            <TextInput
-                                style={[styles.qtyInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-                                keyboardType="numeric"
-                                value={quantityText}
-                                onChangeText={handleQuantityInput}
-                                onBlur={handleQuantityBlur}
-                            />
-                            <TouchableOpacity
-                                style={[styles.qtyBtn, {
-                                    backgroundColor: colors.surfaceLight,
-                                    opacity: quantity >= Number(item.countInStock || 0) ? 0.5 : 1,
-                                }]}
-                                onPress={increaseQty}
-                                disabled={quantity >= Number(item.countInStock || 0)}
-                            >
-                                <Ionicons name="add" size={ms(16, 0.2)} color={colors.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.addToCartBtn, {
-                                backgroundColor: colors.primary,
-                                paddingVertical: spacing.sm + 4,
-                                paddingHorizontal: spacing.lg,
-                                borderRadius: ws(10),
-                            }]}
-                            onPress={() => {
-                                const existingCartItem = cartItems.find(ci => (ci._id || ci.id) === (item._id || item.id));
-                                const currentQtyInCart = existingCartItem ? (existingCartItem.quantity || 1) : 0;
-                                if ((currentQtyInCart + quantity) > item.countInStock) {
-                                    Toast.show({
-                                        topOffset: 60,
-                                        type: "error",
-                                        text1: "Stock limit reached",
-                                        text2: `Only ${item.countInStock} available for "${item.name}"`
-                                    });
-                                    return;
-                                }
-                                dispatch(addToCart({
-                                    ...item,
-                                    quantity,
-                                    effectivePrice: displayPrice,
-                                    originalPrice: item.price,
-                                }));
-                                Toast.show({
-                                    topOffset: 60,
-                                    type: "success",
-                                    text1: `${item.name} added to Cart`,
-                                    text2: `Quantity: ${quantity}`
-                                });
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="cart" size={ms(20, 0.3)} color={colors.textOnPrimary} />
-                            <Text style={{ color: colors.textOnPrimary, fontWeight: 'bold', marginLeft: spacing.sm, fontSize: fs(15) }}>Add to Cart</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : null}
-            </View>
         </View>
     )
 }
@@ -354,12 +486,96 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    imageContainer: {},
+    imageContainer: {
+        borderWidth: 1,
+    },
+    heroInfoCard: {
+        marginTop: 2,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 12,
+    },
+    heroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    brandPill: {
+        borderWidth: 1,
+        borderRadius: 999,
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    stockPill: {
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    ratingInlineRow: {
+        marginTop: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     image: {
         width: '100%',
     },
+    imageCountPill: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    sliderNav: {
+        position: 'absolute',
+        top: '46%',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sliderDots: {
+        position: 'absolute',
+        bottom: 8,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    sliderDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginHorizontal: 3,
+    },
+    thumbRow: {
+        flexDirection: 'row',
+        marginTop: 2,
+        marginBottom: 4,
+    },
+    thumb: {
+        width: 52,
+        height: 52,
+        borderRadius: 10,
+        borderWidth: 2,
+        marginRight: 8,
+        overflow: 'hidden',
+    },
+    thumbImage: {
+        width: '100%',
+        height: '100%',
+    },
     contentContainer: {
-        marginTop: 16,
+        marginTop: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -378,19 +594,24 @@ const styles = StyleSheet.create({
     descriptionContainer: {
         borderWidth: 1,
     },
+    sectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     stockRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    bottomContainer: {
+    purchaseCard: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 12,
+    },
+    purchaseRow: {
         flexDirection: 'row',
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderTopWidth: 1,
     },
     price: {
         fontWeight: 'bold',
@@ -398,6 +619,7 @@ const styles = StyleSheet.create({
     addToCartBtn: {
         flexDirection: 'row',
         alignItems: 'center',
+        borderWidth: 1,
     },
     bottomRightWrap: {
         alignItems: 'flex-end',

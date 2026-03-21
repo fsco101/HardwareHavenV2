@@ -5,11 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import TrafficLight from "./StyledComponents/TrafficLight";
 import EasyButton from "./StyledComponents/EasyButton";
 import Toast from './SnackbarService';
-import { Picker } from "@react-native-picker/picker";
+import CustomDropdown from './CustomDropdown';
 import { useTheme } from '../Theme/theme';
 
 import { useResponsive } from '../assets/common/responsive';
 import { formatPHDate } from '../assets/common/phTime';
+import { formatOrderNumber } from '../assets/common/orderNumber';
 import { getToken } from '../assets/common/tokenStorage';
 import { useDispatch } from 'react-redux';
 import { updateOrderStatus } from '../Redux/Actions/orderActions';
@@ -18,7 +19,22 @@ const codes = [
   { name: "Pending", code: "Pending" },
   { name: "Processing", code: "Processing" },
   { name: "Shipped", code: "Shipped" },
+  { name: "Cancelled", code: "Cancelled" },
 ];
+
+const statusOptions = codes.map((item) => ({
+  label: item.name,
+  value: item.code,
+}));
+
+const getStatusMeta = (status, colors) => {
+  if (status === 'Pending') return { color: colors.warning, icon: 'time-outline', label: 'Pending' };
+  if (status === 'Processing') return { color: colors.secondary, icon: 'sync-outline', label: 'Processing' };
+  if (status === 'Shipped') return { color: colors.primary, icon: 'car-outline', label: 'Shipped' };
+  if (status === 'Cancelled') return { color: colors.danger, icon: 'close-circle-outline', label: 'Cancelled' };
+  return { color: colors.textSecondary, icon: 'help-circle-outline', label: status || 'Unknown' };
+};
+
 const OrderCard = ({ item, update, onRefresh }) => {
   const colors = useTheme();
   const { fs, spacing } = useResponsive();
@@ -26,12 +42,45 @@ const OrderCard = ({ item, update, onRefresh }) => {
   const [statusText, setStatusText] = useState('');
   const [statusChange, setStatusChange] = useState(item.status);
   const [cardColor, setCardColor] = useState('');
+  const [updating, setUpdating] = useState(false);
   const dispatch = useDispatch();
+  const orderId = item?._id || item?.id;
 
   const updateOrder = async () => {
+    if (!orderId) {
+      Toast.show({
+        topOffset: 60,
+        type: 'error',
+        text1: 'Order update failed',
+        text2: 'Missing order ID. Please refresh the order list.',
+      });
+      return;
+    }
+
+    if (!statusChange || statusChange === item.status) {
+      Toast.show({
+        topOffset: 60,
+        type: 'info',
+        text1: 'No status change',
+        text2: 'Select a different status before updating.',
+      });
+      return;
+    }
+
     try {
+      setUpdating(true);
       const jwt = await getToken();
-      const result = await dispatch(updateOrderStatus(item.id, statusChange, jwt));
+      if (!jwt) {
+        Toast.show({
+          topOffset: 60,
+          type: 'error',
+          text1: 'Session expired',
+          text2: 'Please login again as admin.',
+        });
+        return;
+      }
+
+      const result = await dispatch(updateOrderStatus(orderId, statusChange, jwt));
       if (result.success) {
         Toast.show({
           topOffset: 60,
@@ -53,13 +102,17 @@ const OrderCard = ({ item, update, onRefresh }) => {
         topOffset: 60,
         type: "error",
         text1: "Something went wrong",
-        text2: error.response?.data?.message || "Please try again",
+        text2: error.response?.data?.message || error.message || "Please try again",
       });
+    } finally {
+      setUpdating(false);
     }
   }
 
   useEffect(() => {
     const status = item.status;
+    setStatusChange(status);
+
     if (status === "Pending") {
       setOrderStatus(<TrafficLight unavailable></TrafficLight>);
       setStatusText("Pending");
@@ -91,12 +144,12 @@ const OrderCard = ({ item, update, onRefresh }) => {
       setStatusText('');
       setCardColor('');
     };
-  }, [item.status]);
+  }, [item.status, colors]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBg, borderLeftColor: cardColor, borderLeftWidth: 4, padding: spacing.lg, margin: spacing.sm + 2 }]}>
       <View>
-        <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(16) }}>Order #{item.id?.substring(item.id.length - 8) || item.id}</Text>
+        <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(16) }}>Order #{formatOrderNumber(item)}</Text>
       </View>
       <View style={{ marginTop: spacing.sm + 2 }}>
         <Text style={{ color: colors.text, fontSize: fs(14) }}>
@@ -125,27 +178,41 @@ const OrderCard = ({ item, update, onRefresh }) => {
         ) : null}
         {update && item.status !== 'Cancelled' && item.status !== 'Delivered' ? <View>
           <>
-            <Picker
-              width="80%"
-              style={{ width: undefined, color: colors.text, backgroundColor: colors.inputBg }}
-              selectedValue={statusChange}
-              placeholder="Change Status"
-              onValueChange={(e) => setStatusChange(e)}
-            >
-              {codes.map((c) => {
-                return <Picker.Item
-                  key={c.code}
-                  label={c.name}
-                  value={c.code}
+            <Text style={{ color: colors.textSecondary, fontSize: fs(12), marginTop: spacing.sm, marginBottom: spacing.xs }}>
+              Change Status
+            </Text>
+            <View style={[styles.pickerWrap, { borderColor: colors.border, backgroundColor: colors.inputBg, opacity: updating ? 0.6 : 1 }]}> 
+              <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}> 
+                <View style={[styles.statusDot, { backgroundColor: getStatusMeta(statusChange, colors).color }]} />
+                <Ionicons
+                  name={getStatusMeta(statusChange, colors).icon}
+                  size={14}
+                  color={getStatusMeta(statusChange, colors).color}
+                  style={{ marginRight: 6 }}
                 />
-              })}
-            </Picker>
+                <Text style={{ color: colors.textSecondary, fontSize: fs(11), fontWeight: '600' }}>
+                  Selected: <Text style={{ color: getStatusMeta(statusChange, colors).color }}>{getStatusMeta(statusChange, colors).label}</Text>
+                </Text>
+              </View>
+              <View style={styles.dropdownWrap}>
+                <CustomDropdown
+                  data={statusOptions}
+                  value={statusChange}
+                  onSelect={setStatusChange}
+                  placeholder="Select status"
+                  enabled={!updating}
+                  searchable={false}
+                  icon="list-outline"
+                />
+              </View>
+            </View>
             <EasyButton
               secondary
               large
+              disabled={updating}
               onPress={() => updateOrder()}
             >
-              <Text style={{ color: colors.textOnPrimary }}>Update</Text>
+              <Text style={{ color: colors.textOnPrimary }}>{updating ? 'Updating...' : 'Update'}</Text>
             </EasyButton>
           </>
         </View> : null}
@@ -170,6 +237,29 @@ const styles = StyleSheet.create({
   },
   price: {
     fontWeight: "bold",
+  },
+  pickerWrap: {
+    marginTop: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  dropdownWrap: {
+    padding: 8,
   },
 });
 

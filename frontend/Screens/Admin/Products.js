@@ -6,13 +6,11 @@ import {
     ActivityIndicator,
     StyleSheet,
     RefreshControl,
+    TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native"
 import { Searchbar } from 'react-native-paper';
 import ListItem from "./ListItem"
-import EasyButton from "../../Shared/StyledComponents/EasyButton";
-import { useNavigation } from "@react-navigation/native"
 import { useTheme } from '../../Theme/theme';
 import SweetAlert from '../../Shared/SweetAlert';
 import Toast from '../../Shared/SnackbarService';
@@ -20,6 +18,7 @@ import { useResponsive } from '../../assets/common/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 import { deleteProduct as deleteProductAction, fetchProducts } from '../../Redux/Actions/productActions';
 import { getToken } from '../../assets/common/tokenStorage';
+import { Ionicons } from '@expo/vector-icons';
 
 const Products = (props) => {
     const colors = useTheme();
@@ -28,12 +27,15 @@ const Products = (props) => {
     const [productList, setProductList] = useState([]);
     const [productFilter, setProductFilter] = useState([]);
     const [loading, setLoading] = useState(true);
-    const navigation = useNavigation()
     const [refreshing, setRefreshing] = useState(false);
     const [deleteId, setDeleteId] = useState(null);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
     const dispatch = useDispatch();
     const productsState = useSelector((state) => state.products);
+
+    const openAddProduct = () => {
+        props.navigation.navigate('ProductForm');
+    };
 
     const ListHeader = () => {
         if (isMobile) return null;
@@ -129,32 +131,26 @@ const Products = (props) => {
                 onConfirm={confirmDelete}
                 onCancel={() => setShowDeleteAlert(false)}
             />
-            <View style={[styles.buttonContainer, { marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm }]}> 
-                <EasyButton secondary medium onPress={() => navigation.navigate("Dashboard")}>
-                    <Ionicons name="analytics-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Dashboard</Text>
-                </EasyButton>
-                <EasyButton secondary medium onPress={() => navigation.navigate("Orders")}>
-                    <Ionicons name="bag-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Orders</Text>
-                </EasyButton>
-                <EasyButton secondary medium onPress={() => navigation.navigate("ProductForm")}>
-                    <Ionicons name="add-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Products</Text>
-                </EasyButton>
-                <EasyButton secondary medium onPress={() => navigation.navigate("Categories")}>
-                    <Ionicons name="add-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Categories</Text>
-                </EasyButton>
-                <EasyButton secondary medium onPress={() => navigation.navigate("User Management")}>
-                    <Ionicons name="people-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Users</Text>
-                </EasyButton>
-                <EasyButton secondary medium onPress={() => navigation.navigate("Review Management")}>
-                    <Ionicons name="chatbubbles-outline" size={18} color="white" />
-                    <Text style={styles.buttonText}>Reviews</Text>
-                </EasyButton>
-            </View>
+
+            <TouchableOpacity
+                style={[
+                    styles.addButton,
+                    {
+                        backgroundColor: colors.primary,
+                        marginHorizontal: spacing.lg,
+                        marginBottom: spacing.sm,
+                        borderRadius: ws(10),
+                    },
+                ]}
+                activeOpacity={0.8}
+                onPress={openAddProduct}
+            >
+                <Ionicons name="add-circle-outline" size={18} color={colors.textOnPrimary} />
+                <Text style={{ color: colors.textOnPrimary, fontWeight: '700', fontSize: fs(14), marginLeft: 6 }}>
+                    Add Product
+                </Text>
+            </TouchableOpacity>
+
             <Searchbar
                 placeholder="Search products..."
                 onChangeText={(text) => searchProduct(text)}
@@ -196,17 +192,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center'
     },
-    buttonContainer: {
-        alignSelf: 'center',
+    addButton: {
+        height: 42,
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
     },
-    buttonText: {
-        marginLeft: 4,
-        color: 'white'
-    }
 })
 
 export default Products;

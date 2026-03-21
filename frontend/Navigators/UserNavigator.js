@@ -6,6 +6,7 @@ import UserProfile from "../Screens/User/UserProfile";
 import UserOrders from "../Screens/Orders/UserOrders";
 import ResetPassword from "../Screens/User/ResetPassword";
 import { darkColors } from '../Theme/theme';
+import { buildStackHeaderOptions } from './stackHeaderOptions';
 
 const Stack = createStackNavigator();
 
@@ -13,9 +14,7 @@ const UserNavigator = (props) => {
     return (
         <Stack.Navigator
             screenOptions={{
-                headerStyle: { backgroundColor: darkColors.headerBg },
-                headerTintColor: darkColors.text,
-                headerTitleStyle: { fontWeight: 'bold' },
+                ...buildStackHeaderOptions(darkColors),
                 cardStyle: { backgroundColor: darkColors.background },
             }}
         >

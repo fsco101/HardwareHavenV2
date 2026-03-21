@@ -22,7 +22,7 @@ const Header = () => {
     };
 
     return (
-        <SafeAreaView style={[styles.header, { backgroundColor: colors.headerBg, paddingVertical: spacing.sm + 4, paddingHorizontal: spacing.lg }]}>
+        <SafeAreaView style={[styles.header, { backgroundColor: colors.headerBg, paddingTop: spacing.sm + 4, paddingBottom: spacing.xs, paddingHorizontal: spacing.lg }]}>
             <TouchableOpacity
                 onPress={toggleDrawer}
                 activeOpacity={0.75}
