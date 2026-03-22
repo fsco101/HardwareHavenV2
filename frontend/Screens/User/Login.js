@@ -34,23 +34,13 @@ const Login = (props) => {
     const [googleLoading, setGoogleLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [deactivationAlert, setDeactivationAlert] = useState({ visible: false, message: '' })
-
-    const isNative = Platform.OS !== 'web';
     const isExpoGo =
         Constants.appOwnership === 'expo' ||
         Constants.executionEnvironment === 'storeClient';
-    const projectNameForProxy =
-        Constants.expoConfig?.originalFullName ||
-        (Constants.expoConfig?.owner && Constants.expoConfig?.slug
-            ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
-            : undefined);
-    const nativeRedirectCandidate = AuthSession.makeRedirectUri({
-        scheme: Constants.expoConfig?.scheme,
-    });
-    const useProxy = isNative && (isExpoGo || nativeRedirectCandidate.startsWith('exp://'));
-    const redirectUri = AuthSession.makeRedirectUri({
-        useProxy,
-        scheme: Constants.expoConfig?.scheme,
+
+    const nativeGoogleRedirectUri = AuthSession.makeRedirectUri({
+        scheme: Constants.expoConfig?.scheme || 'hardwarehaven',
+        path: 'oauthredirect',
     });
 
     const getLoginErrorToast = (result) => {
@@ -84,22 +74,40 @@ const Login = (props) => {
     };
 
     const googleRequestConfig = {
-        // Expo Go/proxy flow uses Web OAuth client; native builds use Android/iOS client IDs.
         expoClientId: googleAuthConfig.expoClientId || googleAuthConfig.webClientId,
-        webClientId: googleAuthConfig.webClientId || googleAuthConfig.expoClientId,
-        // Android SDK validates this field on Android even when using proxy.
         androidClientId:
             googleAuthConfig.androidClientId ||
-            googleAuthConfig.expoClientId ||
-            googleAuthConfig.webClientId,
-        iosClientId: googleAuthConfig.iosClientId || googleAuthConfig.expoClientId || googleAuthConfig.webClientId,
-        redirectUri,
-        useProxy,
+            googleAuthConfig.webClientId ||
+            googleAuthConfig.expoClientId,
+        iosClientId:
+            googleAuthConfig.iosClientId ||
+            googleAuthConfig.webClientId ||
+            googleAuthConfig.expoClientId,
+        webClientId: googleAuthConfig.webClientId || googleAuthConfig.expoClientId,
+        redirectUri: Platform.OS === 'web' ? undefined : nativeGoogleRedirectUri,
         responseType: 'id_token',
         scopes: ['openid', 'profile', 'email'],
+        prompt: 'login',
     };
 
     const [request, response, promptAsync] = Google.useAuthRequest(googleRequestConfig);
+
+    useEffect(() => {
+        if (!__DEV__) {
+            return;
+        }
+
+        console.log('[GoogleAuth][Config]', {
+            platform: Platform.OS,
+            appOwnership: Constants.appOwnership,
+            executionEnvironment: Constants.executionEnvironment,
+            scheme: Constants.expoConfig?.scheme,
+            isExpoGo,
+            nativeGoogleRedirectUri,
+            requestRedirectUri: request?.redirectUri,
+            requestUrl: request?.url,
+        });
+    }, [isExpoGo, nativeGoogleRedirectUri, request]);
 
     const showDeactivationAlert = (deactivation) => {
         const reason = String(deactivation?.reason || 'No reason provided by admin.').trim();
@@ -143,6 +151,16 @@ const Login = (props) => {
 
     const handleGoogleLogin = async () => {
         if (Platform.OS !== 'web') {
+            if (isExpoGo) {
+                Toast.show({
+                    topOffset: 60,
+                    type: 'error',
+                    text1: 'Google Sign-In not supported in Expo Go',
+                    text2: 'Use a development build or APK so Google can redirect back to your app scheme.',
+                });
+                return;
+            }
+
             if (!request) {
                 Toast.show({
                     topOffset: 60,
@@ -153,12 +171,15 @@ const Login = (props) => {
                 return;
             }
 
+            if (__DEV__) {
+                console.log('[GoogleAuth][PromptStart]', {
+                    requestRedirectUri: request?.redirectUri,
+                    requestUrl: request?.url,
+                });
+            }
+
             setGoogleLoading(true);
-            await promptAsync(
-                useProxy
-                    ? { useProxy: true, projectNameForProxy }
-                    : { useProxy: false }
-            );
+            await promptAsync();
             return;
         }
 
@@ -211,6 +232,17 @@ const Login = (props) => {
         const handleMobileGoogleLogin = async () => {
             if (Platform.OS === 'web') {
                 return;
+            }
+
+            if (__DEV__ && response) {
+                console.log('[GoogleAuth][Response]', {
+                    type: response.type,
+                    hasAuthentication: !!response.authentication,
+                    hasParams: !!response.params,
+                    hasIdToken:
+                        !!response.authentication?.idToken ||
+                        !!response.params?.id_token,
+                });
             }
 
             if (!response || response.type !== 'success') {
@@ -371,14 +403,16 @@ const Login = (props) => {
                     style={[styles.googleBtn, { backgroundColor: colors.surface, borderColor: colors.border, paddingVertical: 10, borderRadius: 8, marginTop: 8 }]}
                     onPress={() => handleGoogleLogin()}
                     activeOpacity={0.7}
-                    disabled={googleLoading}
+                    disabled={googleLoading || (Platform.OS !== 'web' && isExpoGo)}
                 >
                     {googleLoading ? (
                         <ActivityIndicator color={colors.text} size="small" />
                     ) : (
                         <>
                             <Ionicons name="logo-google" size={18} color={colors.secondary} style={{ marginRight: 6 }} />
-                            <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(15) }}>Sign in with Google</Text>
+                            <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: fs(15) }}>
+                                {Platform.OS !== 'web' && isExpoGo ? 'Google Sign-In requires dev build' : 'Sign in with Google'}
+                            </Text>
                         </>
                     )}
                 </TouchableOpacity>
